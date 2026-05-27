@@ -21,12 +21,12 @@ Generate an API key from your Cursor account settings.
 
 ## Runtime
 
-Agent pods invoke `/opt/optio/run-cursor-agent.mjs`, which calls `Agent.prompt()` with `local: { cwd: worktree }`. stdout is NDJSON for Optio log streaming.
+Agent pods invoke `node /opt/optio/run-cursor-agent.mjs` from the task worktree (`/workspace/tasks/<taskId>`). The runner uses `Agent.create()` + `run.stream()` and emits OpenClaw-compatible NDJSON so Optio's stall detector sees ongoing activity.
 
 ## Limitations
 
 - Review tasks still use Claude Code (or another supported review agent).
-- Resume / multi-turn uses one-shot `Agent.prompt()` in v1.
+- Resume / multi-turn uses one-shot `agent.send()` in v1.
 - Requires the cursor-enabled agent image built from this fork.
 
 ## Building the agent image
