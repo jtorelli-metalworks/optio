@@ -802,6 +802,14 @@ export function startTaskWorker() {
         // exists as a tasks.taskType — external PR reviews run under
         // pr_review_runs via pr-review-worker.ts.
         const isReviewTask = !!reviewOverride || task.taskType === "review";
+        if (!isReviewTask && !isPlanningRun) {
+          allEnv.OPTIO_AUTO_CREATE_PR_ON_SUCCESS =
+            process.env.OPTIO_AUTO_CREATE_PR_ON_SUCCESS ?? "true";
+          allEnv.OPTIO_PR_TITLE = task.title;
+          allEnv.OPTIO_TICKET_REFERENCE = task.ticketExternalId ?? "";
+          allEnv.OPTIO_DRAFT_PR = promptConfig.cautiousMode ? "true" : "";
+          allEnv.OPTIO_GIT_PLATFORM_GITLAB = isGitLab ? "true" : "";
+        }
         const agentCommand = buildAgentCommand(task.agentType, allEnv, {
           resumeSessionId,
           resumePrompt,
@@ -1899,6 +1907,7 @@ export function inferExitCode(agentType: string, logs: string): number {
         : 0;
     }
     case "cursor": {
+      const hasResultEvent = logs.includes('"type":"result"') || logs.includes('"type": "result"');
       const hasErrorEvent = logs.includes('"type":"error"') || logs.includes('"type": "error"');
       const hasResultError =
         logs.includes('"status":"error"') ||
@@ -1909,7 +1918,7 @@ export function inferExitCode(agentType: string, logs: string): number {
         /CURSOR_API_KEY|cursor.*auth|invalid.*api.?key|unauthorized|authentication.*failed/i.test(
           logs,
         );
-      return hasErrorEvent || hasResultError || hasAuthError ? 1 : 0;
+      return !hasResultEvent || hasErrorEvent || hasResultError || hasAuthError ? 1 : 0;
     }
     case "claude-code":
     default: {

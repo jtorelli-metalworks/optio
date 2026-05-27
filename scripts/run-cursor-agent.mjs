@@ -16,6 +16,12 @@ function emit(event) {
   console.log(JSON.stringify(event));
 }
 
+function flushStdout() {
+  return new Promise((resolve) => {
+    process.stdout.write("", resolve);
+  });
+}
+
 function emitStreamEvent(event) {
   switch (event.type) {
     case "assistant":
@@ -78,13 +84,18 @@ function emitStreamEvent(event) {
 }
 
 async function main() {
+  let exitCode = 0;
+  let agent;
+
   if (!apiKey) {
     emit({ type: "error", message: "CURSOR_API_KEY is required" });
-    process.exit(1);
+    await flushStdout();
+    return 1;
   }
   if (!prompt) {
     emit({ type: "error", message: "OPTIO_PROMPT is required" });
-    process.exit(1);
+    await flushStdout();
+    return 1;
   }
 
   emit({ type: "system", subtype: "init", model, session_id: sessionId });
@@ -95,7 +106,6 @@ async function main() {
     session_id: sessionId,
   });
 
-  let agent;
   try {
     agent = await Agent.create({
       apiKey,
@@ -124,7 +134,7 @@ async function main() {
       is_error: result.status === "error" || result.status === "cancelled",
     });
 
-    process.exit(result.status === "error" || result.status === "cancelled" ? 1 : 0);
+    exitCode = result.status === "error" || result.status === "cancelled" ? 1 : 0;
   } catch (err) {
     const message =
       err instanceof CursorAgentError
@@ -134,12 +144,29 @@ async function main() {
           : String(err);
     emit({ type: "error", message });
     emit({ type: "result", result: message, status: "error", is_error: true, model });
-    process.exit(1);
+    exitCode = 1;
   } finally {
     if (agent) {
-      await agent.dispose();
+      try {
+        await agent.dispose();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        emit({ type: "message", role: "system", content: `Cursor dispose failed: ${message}` });
+      }
     }
+    await flushStdout();
   }
+
+  return exitCode;
 }
 
-main();
+main()
+  .then((exitCode) => {
+    process.exitCode = exitCode;
+  })
+  .catch(async (err) => {
+    const message = err instanceof Error ? err.message : String(err);
+    emit({ type: "error", message });
+    await flushStdout();
+    process.exitCode = 1;
+  });

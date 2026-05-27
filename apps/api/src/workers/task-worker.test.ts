@@ -390,6 +390,27 @@ describe("inferExitCode", () => {
     });
   });
 
+  describe("cursor", () => {
+    it("returns 0 when the runner emits a successful result event", () => {
+      const logs =
+        '{"type":"system","subtype":"init","session_id":"task-1"}\n' +
+        '{"type":"result","status":"completed","is_error":false}\n';
+      expect(inferExitCode("cursor", logs)).toBe(0);
+    });
+
+    it("returns 1 when the cursor stream ends without a result event", () => {
+      const logs =
+        '{"type":"system","subtype":"init","session_id":"task-1"}\n' +
+        '{"type":"tool_call","name":"shell","arguments":{"command":"./gradlew test"}}\n';
+      expect(inferExitCode("cursor", logs)).toBe(1);
+    });
+
+    it("returns 1 when the cursor result is an error", () => {
+      const logs = '{"type":"result","status":"error","is_error":true}\n';
+      expect(inferExitCode("cursor", logs)).toBe(1);
+    });
+  });
+
   describe("default (unknown agent type)", () => {
     it("uses claude-code patterns as default", () => {
       expect(inferExitCode("some-future-agent", "fatal: error")).toBe(1);
