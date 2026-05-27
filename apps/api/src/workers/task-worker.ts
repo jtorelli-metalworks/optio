@@ -1148,8 +1148,14 @@ export function startTaskWorker() {
         }
         const detectedPrUrl = capturedPrUrl || taskAfterExec?.prUrl || fallbackPrUrl;
 
-        if (!sessionId && !isReviewTask) {
+        const cursorHadStreamOutput =
+          task.agentType === "cursor" &&
+          (allLogs.includes('"subtype":"init"') ||
+            allLogs.includes('"subtype": "init"') ||
+            allLogs.includes('"type":"message"'));
+        if (!sessionId && !isReviewTask && !cursorHadStreamOutput) {
           // Agent never started — no session ID means no agent output was produced.
+          // Cursor emits session_id on init NDJSON; cursorHadStreamOutput is a fallback.
           await repoPool.updateWorktreeState(taskId, "dirty");
           await taskService.transitionTask(
             taskId,

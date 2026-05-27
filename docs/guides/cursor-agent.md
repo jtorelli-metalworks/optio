@@ -21,7 +21,7 @@ Generate an API key from your Cursor account settings.
 
 ## Runtime
 
-Agent pods invoke `node /opt/optio/run-cursor-agent.mjs` from the task worktree (`/workspace/tasks/<taskId>`). The runner uses `Agent.create()` + `run.stream()` and emits OpenClaw-compatible NDJSON so Optio's stall detector sees ongoing activity.
+Agent pods invoke `node /opt/optio/run-cursor-agent.mjs` from the task worktree (`/workspace/tasks/<taskId>`). The runner uses `Agent.create()` + `run.stream()` and emits OpenClaw-compatible NDJSON (including `session_id` from `OPTIO_TASK_ID`) so Optio's stall detector and session tracking work correctly.
 
 ## Limitations
 

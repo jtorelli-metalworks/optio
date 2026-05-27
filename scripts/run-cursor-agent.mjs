@@ -9,6 +9,8 @@ const apiKey = process.env.CURSOR_API_KEY;
 const model = process.env.OPTIO_CURSOR_MODEL || "composer-2.5";
 const prompt = process.env.OPTIO_PROMPT;
 const worktreeCwd = process.env.OPTIO_WORKTREE_CWD || process.cwd();
+// Optio's task worker keys off session_id to detect agent startup (see agent_no_output).
+const sessionId = process.env.OPTIO_TASK_ID || `cursor-${Date.now()}`;
 
 function emit(event) {
   console.log(JSON.stringify(event));
@@ -67,7 +69,7 @@ function emitStreamEvent(event) {
       break;
     case "system":
       if (event.model) {
-        emit({ type: "system", subtype: "init", model: event.model });
+        emit({ type: "system", subtype: "init", model: event.model, session_id: sessionId });
       }
       break;
     default:
@@ -85,8 +87,13 @@ async function main() {
     process.exit(1);
   }
 
-  emit({ type: "system", subtype: "init", model });
-  emit({ type: "message", role: "system", content: `Worktree: ${worktreeCwd}` });
+  emit({ type: "system", subtype: "init", model, session_id: sessionId });
+  emit({
+    type: "message",
+    role: "system",
+    content: `Worktree: ${worktreeCwd}`,
+    session_id: sessionId,
+  });
 
   let agent;
   try {
@@ -113,6 +120,7 @@ async function main() {
       result: result.result ?? "",
       status: result.status,
       model,
+      session_id: sessionId,
       is_error: result.status === "error" || result.status === "cancelled",
     });
 
