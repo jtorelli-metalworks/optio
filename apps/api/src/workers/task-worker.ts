@@ -1787,7 +1787,10 @@ export function buildAgentCommand(
       ];
     }
     case "cursor": {
-      return [`echo "[optio] Running Cursor Composer..."`, `node /opt/optio/run-cursor-agent.mjs`];
+      return [
+        `echo "[optio] Running Cursor Composer..."`,
+        `cd /opt/optio && node run-cursor-agent.mjs`,
+      ];
     }
     default:
       return [`echo "Unknown agent type: ${agentType}" && exit 1`];

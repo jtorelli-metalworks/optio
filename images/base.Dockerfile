@@ -61,8 +61,9 @@ RUN npm install -g openclaw || echo "WARN: openclaw install failed; openclaw age
 RUN apt-get update && apt-get install -y python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Cursor Agent SDK (headless Composer) — required for cursor agent type
-RUN npm install -g @cursor/sdk@1.0.13 \
+# Cursor Agent SDK — local install in /opt/optio (global npm does not resolve ESM)
+COPY scripts/cursor-agent/package.json /opt/optio/package.json
+RUN cd /opt/optio && npm install --omit=dev \
     && node -e "import('@cursor/sdk').then(() => console.log('cursor sdk ok'))"
 
 # Workspace + Optio scripts

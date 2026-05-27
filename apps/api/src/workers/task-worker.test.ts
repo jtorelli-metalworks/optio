@@ -241,7 +241,7 @@ describe("buildAgentCommand", () => {
       const env = { OPTIO_PROMPT: "Build feature", OPTIO_CURSOR_MODEL: "composer-2.5" };
       const cmds = buildAgentCommand("cursor", env);
       expect(cmds.some((c) => c.includes("Cursor Composer"))).toBe(true);
-      expect(cmds.some((c) => c.includes("run-cursor-agent.mjs"))).toBe(true);
+      expect(cmds.some((c) => c.includes("cd /opt/optio && node run-cursor-agent.mjs"))).toBe(true);
     });
   });
 
