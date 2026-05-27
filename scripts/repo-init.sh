@@ -4,6 +4,8 @@ set -euo pipefail
 echo "[optio] Initializing repo pod"
 echo "[optio] Repo: ${OPTIO_REPO_URL} (branch: ${OPTIO_REPO_BRANCH})"
 
+rm -f /workspace/.ready
+
 # Configure git author for initial clone (overridden per-worktree at task exec time)
 git config --global user.name "${GIT_BOT_NAME:-${GITHUB_APP_BOT_NAME:-Optio Agent}}"
 git config --global user.email "${GIT_BOT_EMAIL:-${GITHUB_APP_BOT_EMAIL:-optio-agent@noreply.github.com}}"
@@ -97,11 +99,37 @@ if [ -n "${OPTIO_EXTRA_PACKAGES:-}" ]; then
   sudo apt-get update -qq 2>/dev/null && sudo apt-get install -y -qq ${PACKAGES} 2>&1 | tail -3 || echo "[optio] Warning: package install failed"
 fi
 
-# Clone repo (--recurse-submodules handles repos with submodules)
+# Clone or refresh repo (--recurse-submodules handles repos with submodules).
+# Stateful repo pods may restart with /workspace persisted, so /workspace/repo
+# can already exist from a previous run.
 cd /workspace
-echo "[optio] Cloning..."
-git clone --branch "${OPTIO_REPO_BRANCH}" --recurse-submodules "${OPTIO_REPO_URL}" repo 2>&1
-echo "[optio] Repo cloned"
+if [ -d /workspace/repo/.git ]; then
+  existing_remote="$(git -C /workspace/repo remote get-url origin 2>/dev/null || true)"
+  if [ "${existing_remote}" = "${OPTIO_REPO_URL}" ]; then
+    echo "[optio] Existing repo found — refreshing"
+    git -C /workspace/repo fetch --prune origin 2>&1
+    git -C /workspace/repo checkout "${OPTIO_REPO_BRANCH}" 2>/dev/null || true
+    git -C /workspace/repo reset --hard "origin/${OPTIO_REPO_BRANCH}" 2>&1
+    git -C /workspace/repo worktree prune 2>/dev/null || true
+    if [ -f /workspace/repo/.gitmodules ]; then
+      git -C /workspace/repo submodule update --init --recursive 2>&1
+    fi
+    echo "[optio] Repo refreshed"
+  else
+    echo "[optio] Existing repo remote mismatch — recloning"
+    rm -rf /workspace/repo
+    git clone --branch "${OPTIO_REPO_BRANCH}" --recurse-submodules "${OPTIO_REPO_URL}" repo 2>&1
+    echo "[optio] Repo cloned"
+  fi
+else
+  if [ -e /workspace/repo ]; then
+    echo "[optio] Removing invalid repo directory"
+    rm -rf /workspace/repo
+  fi
+  echo "[optio] Cloning..."
+  git clone --branch "${OPTIO_REPO_BRANCH}" --recurse-submodules "${OPTIO_REPO_URL}" repo 2>&1
+  echo "[optio] Repo cloned"
+fi
 
 # Create tasks directory for worktrees
 mkdir -p /workspace/tasks
