@@ -236,6 +236,15 @@ describe("buildAgentCommand", () => {
     });
   });
 
+  describe("cursor agent", () => {
+    it("invokes the Cursor SDK runner script", () => {
+      const env = { OPTIO_PROMPT: "Build feature", OPTIO_CURSOR_MODEL: "composer-2.5" };
+      const cmds = buildAgentCommand("cursor", env);
+      expect(cmds.some((c) => c.includes("Cursor Composer"))).toBe(true);
+      expect(cmds.some((c) => c.includes("run-cursor-agent.mjs"))).toBe(true);
+    });
+  });
+
   describe("unknown agent", () => {
     it("produces an error exit command for unknown agent types", () => {
       const env = { OPTIO_PROMPT: "Do something" };

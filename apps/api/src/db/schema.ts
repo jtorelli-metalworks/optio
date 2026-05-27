@@ -264,6 +264,7 @@ export const repos = pgTable(
     claudeEffort: text("claude_effort").default("high"), // "low", "medium", "high"
     copilotModel: text("copilot_model"), // null = use copilot default
     copilotEffort: text("copilot_effort"), // "low", "medium", "high"
+    cursorModel: text("cursor_model"), // null = composer-2.5 default
     opencodeModel: text("opencode_model"), // e.g. "anthropic/claude-sonnet-4", null = OpenCode default
     opencodeAgent: text("opencode_agent"), // e.g. "build", "plan", null = default
     opencodeProvider: text("opencode_provider"), // "anthropic" | "openai" | ... for default provider inference

@@ -55,6 +55,7 @@ function makeRepoConfig(overrides: Partial<RepoRecord> = {}): RepoRecord {
     claudeEffort: "high",
     copilotModel: null,
     copilotEffort: null,
+    cursorModel: null,
     opencodeModel: null,
     opencodeAgent: null,
     opencodeProvider: null,

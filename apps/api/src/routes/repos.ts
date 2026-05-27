@@ -37,7 +37,9 @@ const updateRepoSchema = z
     customDockerfile: z.string().nullable().optional(),
     autoMerge: z.boolean().optional(),
     cautiousMode: z.boolean().optional(),
-    defaultAgentType: z.enum(["claude-code", "codex", "copilot", "opencode", "gemini"]).optional(),
+    defaultAgentType: z
+      .enum(["claude-code", "codex", "copilot", "opencode", "gemini", "cursor"])
+      .optional(),
     promptTemplateOverride: z.string().nullable().optional(),
     defaultBranch: z.string().optional(),
     claudeModel: z.string().optional(),
@@ -46,6 +48,7 @@ const updateRepoSchema = z
     claudeEffort: z.string().optional(),
     copilotModel: z.string().optional(),
     copilotEffort: z.string().optional(),
+    cursorModel: z.string().optional(),
     opencodeModel: z.string().optional(),
     opencodeAgent: z.string().optional(),
     opencodeProvider: z.string().optional(),

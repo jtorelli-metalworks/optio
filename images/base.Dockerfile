@@ -61,11 +61,15 @@ RUN npm install -g openclaw || echo "WARN: openclaw install failed; openclaw age
 RUN apt-get update && apt-get install -y python3 \
     && rm -rf /var/lib/apt/lists/*
 
+# Cursor Agent SDK (headless Composer)
+RUN npm install -g @cursor/sdk || echo "WARN: @cursor/sdk install failed; cursor agent will not be available in this image"
+
 # Workspace + Optio scripts
 RUN mkdir -p /workspace /opt/optio
 COPY scripts/agent-entrypoint.sh /opt/optio/entrypoint.sh
 COPY scripts/repo-init.sh /opt/optio/repo-init.sh
-RUN chmod +x /opt/optio/entrypoint.sh /opt/optio/repo-init.sh
+COPY scripts/run-cursor-agent.mjs /opt/optio/run-cursor-agent.mjs
+RUN chmod +x /opt/optio/entrypoint.sh /opt/optio/repo-init.sh /opt/optio/run-cursor-agent.mjs
 
 # Optio credential helpers for dynamic token refresh (GitHub + GitLab)
 COPY scripts/optio-git-credential /usr/local/bin/optio-git-credential

@@ -365,6 +365,7 @@ export function startTaskWorker() {
           claudeEffort: repoConfig?.claudeEffort ?? undefined,
           copilotModel: repoConfig?.copilotModel ?? undefined,
           copilotEffort: repoConfig?.copilotEffort ?? undefined,
+          cursorModel: repoConfig?.cursorModel ?? undefined,
           opencodeModel: repoConfig?.opencodeModel ?? opencodeDefaultModel,
           opencodeAgent: repoConfig?.opencodeAgent ?? undefined,
           opencodeBaseUrl: repoConfig?.opencodeBaseUrl ?? opencodeDefaultBaseUrl,
@@ -925,7 +926,9 @@ export function startTaskWorker() {
                       ? parseGeminiEvent(line, taskId)
                       : task.agentType === "openclaw"
                         ? parseOpenClawEvent(line, taskId)
-                        : parseClaudeEvent(line, taskId);
+                        : task.agentType === "cursor"
+                          ? parseOpenClawEvent(line, taskId)
+                          : parseClaudeEvent(line, taskId);
             if (parsed.sessionId && !sessionId) {
               sessionId = parsed.sessionId;
               await taskService.updateTaskSession(taskId, sessionId);
@@ -1027,7 +1030,9 @@ export function startTaskWorker() {
                     ? parseGeminiEvent(lineBuf, taskId)
                     : task.agentType === "openclaw"
                       ? parseOpenClawEvent(lineBuf, taskId)
-                      : parseClaudeEvent(lineBuf, taskId);
+                      : task.agentType === "cursor"
+                        ? parseOpenClawEvent(lineBuf, taskId)
+                        : parseClaudeEvent(lineBuf, taskId);
           for (const entry of parsed.entries) {
             await taskService.appendTaskLog(
               taskId,
@@ -1781,6 +1786,9 @@ export function buildAgentCommand(
         `openclaw agent --output-format stream-json${openclawModelFlag}${openclawAgentFlag} "$OPTIO_PROMPT"`,
       ];
     }
+    case "cursor": {
+      return [`echo "[optio] Running Cursor Composer..."`, `node /opt/optio/run-cursor-agent.mjs`];
+    }
     default:
       return [`echo "Unknown agent type: ${agentType}" && exit 1`];
   }
@@ -1883,6 +1891,19 @@ export function inferExitCode(agentType: string, logs: string): number {
       return hasErrorEvent || hasApiErrorEnvelope || hasAuthError || hasModelError || hasFatalError
         ? 1
         : 0;
+    }
+    case "cursor": {
+      const hasErrorEvent = logs.includes('"type":"error"') || logs.includes('"type": "error"');
+      const hasResultError =
+        logs.includes('"status":"error"') ||
+        logs.includes('"status": "error"') ||
+        logs.includes('"is_error":true') ||
+        logs.includes('"is_error": true');
+      const hasAuthError =
+        /CURSOR_API_KEY|cursor.*auth|invalid.*api.?key|unauthorized|authentication.*failed/i.test(
+          logs,
+        );
+      return hasErrorEvent || hasResultError || hasAuthError ? 1 : 0;
     }
     case "claude-code":
     default: {
