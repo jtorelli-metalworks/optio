@@ -13,7 +13,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 ### Quick Start
 
 ```bash
-git clone https://github.com/jonwiggins/optio.git
+git clone https://github.com/jtorelli-metalworks/optio.git
 cd optio
 pnpm install
 

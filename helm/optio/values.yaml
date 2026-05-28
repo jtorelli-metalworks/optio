@@ -8,14 +8,14 @@
 # For production deployments, see values.production.yaml for recommended overrides
 # (replicas, autoscaling, ingress, external DB/Redis, etc.).
 #
-# Install a released chart: helm install optio oci://ghcr.io/jonwiggins/optio
+# Install a released chart: helm install optio oci://ghcr.io/jtorelli-metalworks/optio
 
 # ──────────────────────────────────────────────────────────────────────────────
 # API Server
 # ──────────────────────────────────────────────────────────────────────────────
 api:
   image:
-    repository: ghcr.io/jonwiggins/optio-api
+    repository: ghcr.io/jtorelli-metalworks/optio-api
     tag: latest
     pullPolicy: IfNotPresent
   replicas: 1
@@ -65,7 +65,7 @@ api:
 # ──────────────────────────────────────────────────────────────────────────────
 web:
   image:
-    repository: ghcr.io/jonwiggins/optio-web
+    repository: ghcr.io/jtorelli-metalworks/optio-web
     tag: latest
     pullPolicy: IfNotPresent
   replicas: 1
@@ -105,7 +105,7 @@ web:
 optio:
   enabled: true
   image:
-    repository: ghcr.io/jonwiggins/optio-optio
+    repository: ghcr.io/jtorelli-metalworks/optio-optio
     tag: latest
     pullPolicy: IfNotPresent
   # Kubernetes nodeSelector for the optio assistant pod (opt-in).
@@ -123,14 +123,14 @@ optio:
 # ──────────────────────────────────────────────────────────────────────────────
 agent:
   image:
-    repository: ghcr.io/jonwiggins/optio-agent-base
+    repository: ghcr.io/jtorelli-metalworks/optio-agent-base
     tag: latest
     pullPolicy: IfNotPresent
     # Prefix used to resolve preset images (base, node, python, go, rust, full, dind).
     # The full image name is: {prefix}{preset}:{tag}
-    # GHCR: ghcr.io/jonwiggins/optio-agent-  →  ghcr.io/jonwiggins/optio-agent-node:latest
+    # GHCR: ghcr.io/jtorelli-metalworks/optio-agent-  →  ghcr.io/jtorelli-metalworks/optio-agent-node:latest
     # Local: optio-                           →  optio-node:latest
-    prefix: "ghcr.io/jonwiggins/optio-agent-"
+    prefix: "ghcr.io/jtorelli-metalworks/optio-agent-"
   imagePullPolicy: IfNotPresent
   # Envoy sidecar proxy for secret isolation.
   # When repos.secretProxy is enabled, this image is added as a sidecar to agent pods.

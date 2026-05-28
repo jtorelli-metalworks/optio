@@ -109,7 +109,7 @@ export function UpdateBanner() {
               </p>
               <p className="text-xs text-text-muted mt-0.5">
                 <a
-                  href="https://github.com/jonwiggins/optio/releases"
+                  href="https://github.com/jtorelli-metalworks/optio/releases"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 hover:text-primary transition-colors"

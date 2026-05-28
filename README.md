@@ -2,7 +2,7 @@
 
 **Self-hosted AI engineering platform — your cluster, your agents, your code.**
 
-[![CI](https://github.com/jonwiggins/optio/actions/workflows/ci.yml/badge.svg)](https://github.com/jonwiggins/optio/actions/workflows/ci.yml)
+[![CI](https://github.com/jtorelli-metalworks/optio/actions/workflows/ci.yml/badge.svg)](https://github.com/jtorelli-metalworks/optio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
 Optio organizes agent work into three tiers, all driven by the same trigger types, prompt-template engine, log streaming, and `/api/tasks` HTTP surface:
@@ -219,7 +219,7 @@ Connections give your agents access to external tools and data at runtime. Confi
 ### Setup
 
 ```bash
-git clone https://github.com/jonwiggins/optio.git && cd optio
+git clone https://github.com/jtorelli-metalworks/optio.git && cd optio
 ./scripts/setup-local.sh
 ```
 
@@ -318,10 +318,7 @@ github:
     clientId: "Iv1.abc123" # Client ID (for user OAuth login)
     clientSecret: "..." # Client secret
     installationId: "789" # Installation ID (from org install URL)
-    privateKey: | # PEM private key (for server-side tokens)
-      -----BEGIN RSA PRIVATE KEY-----
-      ...
-      -----END RSA PRIVATE KEY-----
+    privateKey: "<your-github-app-private-key-pem>" # PEM private key for server-side tokens
 ```
 
 When configured, users who log in via GitHub get a user access token that is used for all their git and API operations. Background workers (PR watcher, ticket sync) use the app's installation token. If the GitHub App is not configured, Optio falls back to the `GITHUB_TOKEN` PAT.
@@ -340,27 +337,12 @@ The secret must contain these keys: `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GI
 
 ## Production Deployment
 
-Optio ships with a Helm chart for production Kubernetes clusters. Three installation methods are available:
+Optio ships with a Helm chart for production Kubernetes clusters. Two installation methods are available:
 
-### Install from Helm repository (recommended)
-
-```bash
-helm repo add optio https://jonwiggins.github.io/optio
-helm repo update
-helm install optio optio/optio -n optio --create-namespace \
-  --set encryption.key=$(openssl rand -hex 32) \
-  --set postgresql.enabled=false \
-  --set externalDatabase.url="postgres://..." \
-  --set redis.enabled=false \
-  --set externalRedis.url="redis://..." \
-  --set ingress.enabled=true \
-  --set ingress.hosts[0].host=optio.example.com
-```
-
-### Install from OCI registry
+### Install from OCI registry (recommended)
 
 ```bash
-helm install optio oci://ghcr.io/jonwiggins/optio -n optio --create-namespace \
+helm install optio oci://ghcr.io/jtorelli-metalworks/optio -n optio --create-namespace \
   --set encryption.key=$(openssl rand -hex 32) \
   --set postgresql.enabled=false \
   --set externalDatabase.url="postgres://..." \
@@ -373,7 +355,7 @@ helm install optio oci://ghcr.io/jonwiggins/optio -n optio --create-namespace \
 ### Install from source
 
 ```bash
-git clone https://github.com/jonwiggins/optio.git && cd optio
+git clone https://github.com/jtorelli-metalworks/optio.git && cd optio
 helm install optio helm/optio -n optio --create-namespace \
   --set encryption.key=$(openssl rand -hex 32) \
   --set postgresql.enabled=false \

@@ -18,7 +18,7 @@ const jsonLd = {
   sourceOrganization: {
     "@type": "Organization",
     name: "Optio",
-    url: "https://github.com/jonwiggins/optio",
+    url: "https://github.com/jtorelli-metalworks/optio",
   },
 };
 
@@ -134,7 +134,7 @@ export default function Home() {
               Get Started
             </Link>
             <a
-              href="https://github.com/jonwiggins/optio"
+              href="https://github.com/jtorelli-metalworks/optio"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-md border border-border px-8 py-3 text-[14px] font-semibold text-text hover:bg-bg-hover transition-colors"
@@ -170,7 +170,7 @@ export default function Home() {
             <div className="space-y-1 text-text-muted">
               <p>
                 <span className="text-success">$</span> git clone
-                https://github.com/jonwiggins/optio.git
+                https://github.com/jtorelli-metalworks/optio.git
               </p>
               <p>
                 <span className="text-success">$</span> cd optio
@@ -591,7 +591,7 @@ export default function Home() {
               Read the Docs
             </Link>
             <a
-              href="https://github.com/jonwiggins/optio"
+              href="https://github.com/jtorelli-metalworks/optio"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-md border border-border px-8 py-3 text-[14px] font-semibold text-text hover:bg-bg-hover transition-colors"

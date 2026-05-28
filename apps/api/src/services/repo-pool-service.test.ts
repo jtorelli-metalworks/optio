@@ -194,43 +194,61 @@ describe("resolveImage", () => {
   // ── OPTIO_AGENT_IMAGE_PREFIX env var ─────────────────────────────
 
   it("uses OPTIO_AGENT_IMAGE_PREFIX for preset images when set", () => {
-    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jonwiggins/optio-agent-";
-    expect(resolveImage({ preset: "node" })).toBe("ghcr.io/jonwiggins/optio-agent-node:latest");
+    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jtorelli-metalworks/optio-agent-";
+    expect(resolveImage({ preset: "node" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-node:latest",
+    );
   });
 
   it("uses OPTIO_AGENT_IMAGE_PREFIX for base preset", () => {
-    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jonwiggins/optio-agent-";
-    expect(resolveImage({ preset: "base" })).toBe("ghcr.io/jonwiggins/optio-agent-base:latest");
+    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jtorelli-metalworks/optio-agent-";
+    expect(resolveImage({ preset: "base" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-base:latest",
+    );
   });
 
   it("uses OPTIO_AGENT_IMAGE_PREFIX for all presets", () => {
-    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jonwiggins/optio-agent-";
-    expect(resolveImage({ preset: "python" })).toBe("ghcr.io/jonwiggins/optio-agent-python:latest");
-    expect(resolveImage({ preset: "go" })).toBe("ghcr.io/jonwiggins/optio-agent-go:latest");
-    expect(resolveImage({ preset: "rust" })).toBe("ghcr.io/jonwiggins/optio-agent-rust:latest");
-    expect(resolveImage({ preset: "full" })).toBe("ghcr.io/jonwiggins/optio-agent-full:latest");
-    expect(resolveImage({ preset: "dind" })).toBe("ghcr.io/jonwiggins/optio-agent-dind:latest");
+    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jtorelli-metalworks/optio-agent-";
+    expect(resolveImage({ preset: "python" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-python:latest",
+    );
+    expect(resolveImage({ preset: "go" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-go:latest",
+    );
+    expect(resolveImage({ preset: "rust" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-rust:latest",
+    );
+    expect(resolveImage({ preset: "full" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-full:latest",
+    );
+    expect(resolveImage({ preset: "dind" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-dind:latest",
+    );
   });
 
   it("uses OPTIO_AGENT_IMAGE_TAG with prefix for preset images", () => {
-    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jonwiggins/optio-agent-";
+    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jtorelli-metalworks/optio-agent-";
     process.env.OPTIO_AGENT_IMAGE_TAG = "0.1.0";
-    expect(resolveImage({ preset: "node" })).toBe("ghcr.io/jonwiggins/optio-agent-node:0.1.0");
+    expect(resolveImage({ preset: "node" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-node:0.1.0",
+    );
   });
 
   it("defaults tag to latest when OPTIO_AGENT_IMAGE_TAG is not set", () => {
-    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jonwiggins/optio-agent-";
+    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jtorelli-metalworks/optio-agent-";
     delete process.env.OPTIO_AGENT_IMAGE_TAG;
-    expect(resolveImage({ preset: "base" })).toBe("ghcr.io/jonwiggins/optio-agent-base:latest");
+    expect(resolveImage({ preset: "base" })).toBe(
+      "ghcr.io/jtorelli-metalworks/optio-agent-base:latest",
+    );
   });
 
   it("still prefers customImage over prefix-based preset", () => {
-    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jonwiggins/optio-agent-";
+    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jtorelli-metalworks/optio-agent-";
     expect(resolveImage({ customImage: "custom:v1", preset: "node" })).toBe("custom:v1");
   });
 
   it("prefix does not affect fallback when preset is invalid", () => {
-    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jonwiggins/optio-agent-";
+    process.env.OPTIO_AGENT_IMAGE_PREFIX = "ghcr.io/jtorelli-metalworks/optio-agent-";
     delete process.env.OPTIO_AGENT_IMAGE;
     expect(resolveImage({ preset: "nonexistent" as any })).toBe("optio-agent:latest");
   });

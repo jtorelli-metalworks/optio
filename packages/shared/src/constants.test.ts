@@ -7,13 +7,13 @@ import {
 
 describe("generateRepoPodName", () => {
   it("generates a name from an HTTPS GitHub URL", () => {
-    const name = generateRepoPodName("https://github.com/jonwiggins/optio.git");
-    expect(name).toMatch(/^optio-repo-jonwiggins-optio-[0-9a-f]{4}$/);
+    const name = generateRepoPodName("https://github.com/jtorelli-metalworks/optio.git");
+    expect(name).toMatch(/^optio-repo-jtorelli-metalworks-optio-[0-9a-f]{4}$/);
   });
 
   it("generates a name from an SSH GitHub URL", () => {
-    const name = generateRepoPodName("git@github.com:jonwiggins/optio.git");
-    expect(name).toMatch(/^optio-repo-jonwiggins-optio-[0-9a-f]{4}$/);
+    const name = generateRepoPodName("git@github.com:jtorelli-metalworks/optio.git");
+    expect(name).toMatch(/^optio-repo-jtorelli-metalworks-optio-[0-9a-f]{4}$/);
   });
 
   it("handles URLs without .git suffix", () => {
@@ -57,8 +57,8 @@ describe("generateRepoPodName", () => {
 
 describe("generateStatefulSetName", () => {
   it("generates a deterministic name from an HTTPS URL", () => {
-    const name = generateStatefulSetName("https://github.com/jonwiggins/optio.git");
-    expect(name).toBe("optio-sts-jonwiggins-optio");
+    const name = generateStatefulSetName("https://github.com/jtorelli-metalworks/optio.git");
+    expect(name).toBe("optio-sts-jtorelli-metalworks-optio");
   });
 
   it("is deterministic (no random suffix)", () => {

@@ -5,12 +5,14 @@
 If you discover a security vulnerability in Optio, please report it responsibly:
 
 1. **Do not** open a public GitHub issue for security vulnerabilities.
-2. Email your report to **security@optio.dev** with:
+2. Report the issue through GitHub's private vulnerability reporting flow for
+   `jtorelli-metalworks/optio` when available, or contact the repository owner
+   privately with:
    - A description of the vulnerability
    - Steps to reproduce
    - Potential impact
    - Suggested fix (if any)
-3. You will receive an acknowledgment within 48 hours.
+3. You will receive an acknowledgment as soon as practical.
 4. We will work with you to understand the issue and coordinate a fix before any public disclosure.
 
 We ask that you give us reasonable time to address the issue before disclosing it publicly.

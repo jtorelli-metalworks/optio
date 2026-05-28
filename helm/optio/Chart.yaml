@@ -5,9 +5,9 @@ kubeVersion: ">=1.33.0-0"
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/jonwiggins/optio
+home: https://github.com/jtorelli-metalworks/optio
 sources:
-  - https://github.com/jonwiggins/optio
+  - https://github.com/jtorelli-metalworks/optio
 keywords:
   - ai
   - agent
@@ -15,5 +15,5 @@ keywords:
   - kubernetes
   - workflow
 maintainers:
-  - name: jonwiggins
-    url: https://github.com/jonwiggins
+  - name: jtorelli-metalworks
+    url: https://github.com/jtorelli-metalworks

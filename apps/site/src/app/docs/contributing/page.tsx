@@ -43,7 +43,7 @@ export default function ContributingPage() {
 
       <h3 className="mt-6 text-lg font-semibold text-text-heading">Quick Start</h3>
       <div className="mt-3">
-        <CodeBlock title="terminal">{`git clone https://github.com/jonwiggins/optio.git
+        <CodeBlock title="terminal">{`git clone https://github.com/jtorelli-metalworks/optio.git
 cd optio
 pnpm install
 
@@ -386,7 +386,7 @@ cd apps/api && npx drizzle-kit migrate`}</CodeBlock>
       <p className="mt-3 text-text-muted leading-relaxed">
         Optio is MIT licensed. See the{" "}
         <a
-          href="https://github.com/jonwiggins/optio/blob/main/LICENSE"
+          href="https://github.com/jtorelli-metalworks/optio/blob/main/LICENSE"
           className="text-primary-light hover:underline"
           target="_blank"
           rel="noopener noreferrer"

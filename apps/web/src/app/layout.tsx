@@ -29,11 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // API share the same host).
   const publicApiUrl = process.env.PUBLIC_API_URL ?? "";
 
-  // Default to dark; ThemeProvider applies the correct class on mount
+  // Default to light; ThemeProvider applies stored preference on mount
   return (
     <html
       lang="en"
-      className={`dark ${sora.variable} ${ibmPlexMono.variable}`}
+      className={`light ${sora.variable} ${ibmPlexMono.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -46,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Inline script to prevent flash of wrong theme */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("optio_theme");if(t==="light"){document.documentElement.classList.remove("dark");document.documentElement.classList.add("light")}else if(t==="system"&&window.matchMedia("(prefers-color-scheme: light)").matches){document.documentElement.classList.remove("dark");document.documentElement.classList.add("light")}}catch(e){}})()`,
+            __html: `(function(){try{var t=localStorage.getItem("optio_theme");var r="light";if(t==="dark")r="dark";else if(t==="system")r=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.classList.remove("light","dark");document.documentElement.classList.add(r)}catch(e){}})()`,
           }}
         />
       </head>

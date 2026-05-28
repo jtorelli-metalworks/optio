@@ -617,7 +617,7 @@ export async function clusterRoutes(rawApp: FastifyInstance) {
 
       const { targetVersion } = req.body;
 
-      const imageOwner = process.env.OPTIO_IMAGE_OWNER ?? "jonwiggins";
+      const imageOwner = process.env.OPTIO_IMAGE_OWNER ?? "jtorelli-metalworks";
       const registry = "ghcr.io";
 
       const deployments = [
