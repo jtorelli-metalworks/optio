@@ -40,7 +40,7 @@ export default function InstallationPage() {
 
       <h3 className="mt-6 text-lg font-semibold text-text-heading">Automated Setup</h3>
       <div className="mt-3">
-        <CodeBlock title="terminal">{`git clone https://github.com/jonwiggins/optio.git
+        <CodeBlock title="terminal">{`git clone https://github.com/jtorelli-metalworks/optio.git
 cd optio
 ./scripts/setup-local.sh`}</CodeBlock>
       </div>
@@ -97,8 +97,8 @@ pnpm dev:web   # Next.js on :3100`}</CodeBlock>
 
       <h3 className="mt-6 text-lg font-semibold text-text-heading">Helm Install</h3>
       <div className="mt-3">
-        <CodeBlock title="terminal">{`# Add the Optio Helm repository
-helm install optio oci://ghcr.io/jonwiggins/optio/helm/optio \\
+        <CodeBlock title="terminal">{`# Install the released OCI Helm chart
+helm install optio oci://ghcr.io/jtorelli-metalworks/optio \\
   -f values.production.yaml \\
   --namespace optio \\
   --create-namespace`}</CodeBlock>

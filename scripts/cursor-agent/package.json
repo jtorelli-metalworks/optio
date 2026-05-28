@@ -1,0 +1,8 @@
+{
+  "name": "optio-cursor-agent",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cursor/sdk": "1.0.13"
+  }
+}

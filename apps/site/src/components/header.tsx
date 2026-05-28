@@ -21,7 +21,7 @@ export function Header() {
             Docs
           </Link>
           <a
-            href="https://github.com/jonwiggins/optio"
+            href="https://github.com/jtorelli-metalworks/optio"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[13px] font-medium text-text-muted hover:text-text transition-colors"
@@ -73,7 +73,7 @@ export function Header() {
               Docs
             </Link>
             <a
-              href="https://github.com/jonwiggins/optio"
+              href="https://github.com/jtorelli-metalworks/optio"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[13px] font-medium text-text-muted"

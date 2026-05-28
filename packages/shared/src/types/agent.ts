@@ -28,6 +28,7 @@ export interface AgentTaskInput {
   claudeEffort?: string;
   copilotModel?: string;
   copilotEffort?: string;
+  cursorModel?: string;
   opencodeModel?: string;
   opencodeAgent?: string;
   opencodeBaseUrl?: string;

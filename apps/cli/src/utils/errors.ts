@@ -17,7 +17,8 @@ export function friendlyError(err: unknown): never {
         );
       } else if (err.statusCode >= 500) {
         process.stderr.write(
-          yellow("Tip: File an issue at https://github.com/jonwiggins/optio/issues") + "\n",
+          yellow("Tip: File an issue at https://github.com/jtorelli-metalworks/optio/issues") +
+            "\n",
         );
       }
     }

@@ -566,12 +566,19 @@ export class K8sWorkloadManager {
       }
     }
 
-    // For StatefulSets, add volumeClaimTemplate mount for home directory
+    // For StatefulSets, keep both the agent home and task workspace on the
+    // volumeClaimTemplate. Tasks are created under /workspace/tasks and must
+    // survive pod deletion when worktreeState is "preserved".
     if (restartPolicy === "Always") {
-      const mount = new V1VolumeMount();
-      mount.name = "home";
-      mount.mountPath = "/home/agent";
-      volumeMounts.push(mount);
+      const homeMount = new V1VolumeMount();
+      homeMount.name = "home";
+      homeMount.mountPath = "/home/agent";
+      volumeMounts.push(homeMount);
+
+      const workspaceMount = new V1VolumeMount();
+      workspaceMount.name = "home";
+      workspaceMount.mountPath = "/workspace";
+      volumeMounts.push(workspaceMount);
     }
 
     container.volumeMounts = volumeMounts.length > 0 ? volumeMounts : undefined;

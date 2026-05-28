@@ -74,11 +74,17 @@ RUN npm install -g openclaw || echo "WARN: openclaw install failed; openclaw age
 RUN apt-get update && apt-get install -y python3 \
     && rm -rf /var/lib/apt/lists/*
 
+# Cursor Agent SDK — local install in /opt/optio (global npm does not resolve ESM)
+COPY scripts/cursor-agent/package.json /opt/optio/package.json
+RUN cd /opt/optio && npm install --omit=dev \
+    && node -e "import('@cursor/sdk').then(() => console.log('cursor sdk ok'))"
+
 # Workspace + Optio scripts
 RUN mkdir -p /workspace /opt/optio
 COPY scripts/agent-entrypoint.sh /opt/optio/entrypoint.sh
 COPY scripts/repo-init.sh /opt/optio/repo-init.sh
-RUN chmod +x /opt/optio/entrypoint.sh /opt/optio/repo-init.sh
+COPY scripts/run-cursor-agent.mjs /opt/optio/run-cursor-agent.mjs
+RUN chmod +x /opt/optio/entrypoint.sh /opt/optio/repo-init.sh /opt/optio/run-cursor-agent.mjs
 
 # Optio credential helpers for dynamic token refresh (GitHub + GitLab)
 COPY scripts/optio-git-credential /usr/local/bin/optio-git-credential

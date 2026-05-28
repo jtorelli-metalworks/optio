@@ -23,7 +23,8 @@ export type AgentProviderId =
   | "gemini"
   | "copilot"
   | "opencode"
-  | "openclaw";
+  | "openclaw"
+  | "cursor";
 
 export interface ModelOption {
   /** The canonical model id passed to the provider (e.g. "claude-opus-4-7"). */

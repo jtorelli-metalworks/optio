@@ -35,7 +35,15 @@ describe("GET /api/agents/options", () => {
     expect(Array.isArray(body.providers)).toBe(true);
     const ids = body.providers.map((p: { provider: string }) => p.provider);
     expect(ids).toEqual(
-      expect.arrayContaining(["anthropic", "openai", "gemini", "copilot", "opencode", "openclaw"]),
+      expect.arrayContaining([
+        "anthropic",
+        "openai",
+        "gemini",
+        "copilot",
+        "opencode",
+        "openclaw",
+        "cursor",
+      ]),
     );
   });
 });

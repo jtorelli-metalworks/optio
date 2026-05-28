@@ -369,6 +369,7 @@ export function startTaskWorker() {
           claudeEffort: repoConfig?.claudeEffort ?? undefined,
           copilotModel: repoConfig?.copilotModel ?? undefined,
           copilotEffort: repoConfig?.copilotEffort ?? undefined,
+          cursorModel: repoConfig?.cursorModel ?? undefined,
           opencodeModel: repoConfig?.opencodeModel ?? opencodeDefaultModel,
           opencodeAgent: repoConfig?.opencodeAgent ?? undefined,
           opencodeBaseUrl: repoConfig?.opencodeBaseUrl ?? opencodeDefaultBaseUrl,
@@ -805,6 +806,14 @@ export function startTaskWorker() {
         // exists as a tasks.taskType — external PR reviews run under
         // pr_review_runs via pr-review-worker.ts.
         const isReviewTask = !!reviewOverride || task.taskType === "review";
+        if (!isReviewTask && !isPlanningRun) {
+          allEnv.OPTIO_AUTO_CREATE_PR_ON_SUCCESS =
+            process.env.OPTIO_AUTO_CREATE_PR_ON_SUCCESS ?? "true";
+          allEnv.OPTIO_PR_TITLE = task.title;
+          allEnv.OPTIO_TICKET_REFERENCE = task.ticketExternalId ?? "";
+          allEnv.OPTIO_DRAFT_PR = promptConfig.cautiousMode ? "true" : "";
+          allEnv.OPTIO_GIT_PLATFORM_GITLAB = isGitLab ? "true" : "";
+        }
         const agentCommand = buildAgentCommand(task.agentType, allEnv, {
           resumeSessionId,
           resumePrompt,
@@ -929,7 +938,9 @@ export function startTaskWorker() {
                       ? parseGeminiEvent(line, taskId)
                       : task.agentType === "openclaw"
                         ? parseOpenClawEvent(line, taskId)
-                        : parseClaudeEvent(line, taskId);
+                        : task.agentType === "cursor"
+                          ? parseOpenClawEvent(line, taskId)
+                          : parseClaudeEvent(line, taskId);
             if (parsed.sessionId && !sessionId) {
               sessionId = parsed.sessionId;
               await taskService.updateTaskSession(taskId, sessionId);
@@ -1031,7 +1042,9 @@ export function startTaskWorker() {
                     ? parseGeminiEvent(lineBuf, taskId)
                     : task.agentType === "openclaw"
                       ? parseOpenClawEvent(lineBuf, taskId)
-                      : parseClaudeEvent(lineBuf, taskId);
+                      : task.agentType === "cursor"
+                        ? parseOpenClawEvent(lineBuf, taskId)
+                        : parseClaudeEvent(lineBuf, taskId);
           for (const entry of parsed.entries) {
             await taskService.appendTaskLog(
               taskId,
@@ -1147,8 +1160,14 @@ export function startTaskWorker() {
         }
         const detectedPrUrl = capturedPrUrl || taskAfterExec?.prUrl || fallbackPrUrl;
 
-        if (!sessionId && !isReviewTask) {
+        const cursorHadStreamOutput =
+          task.agentType === "cursor" &&
+          (allLogs.includes('"subtype":"init"') ||
+            allLogs.includes('"subtype": "init"') ||
+            allLogs.includes('"type":"message"'));
+        if (!sessionId && !isReviewTask && !cursorHadStreamOutput) {
           // Agent never started — no session ID means no agent output was produced.
+          // Cursor emits session_id on init NDJSON; cursorHadStreamOutput is a fallback.
           await repoPool.updateWorktreeState(taskId, "dirty");
           await taskService.transitionTask(
             taskId,
@@ -1785,6 +1804,9 @@ export function buildAgentCommand(
         `openclaw agent --output-format stream-json${openclawModelFlag}${openclawAgentFlag} "$OPTIO_PROMPT"`,
       ];
     }
+    case "cursor": {
+      return [`echo "[optio] Running Cursor Composer..."`, `node /opt/optio/run-cursor-agent.mjs`];
+    }
     default:
       return [`echo "Unknown agent type: ${agentType}" && exit 1`];
   }
@@ -1887,6 +1909,20 @@ export function inferExitCode(agentType: string, logs: string): number {
       return hasErrorEvent || hasApiErrorEnvelope || hasAuthError || hasModelError || hasFatalError
         ? 1
         : 0;
+    }
+    case "cursor": {
+      const hasResultEvent = logs.includes('"type":"result"') || logs.includes('"type": "result"');
+      const hasErrorEvent = logs.includes('"type":"error"') || logs.includes('"type": "error"');
+      const hasResultError =
+        logs.includes('"status":"error"') ||
+        logs.includes('"status": "error"') ||
+        logs.includes('"is_error":true') ||
+        logs.includes('"is_error": true');
+      const hasAuthError =
+        /CURSOR_API_KEY|cursor.*auth|invalid.*api.?key|unauthorized|authentication.*failed/i.test(
+          logs,
+        );
+      return !hasResultEvent || hasErrorEvent || hasResultError || hasAuthError ? 1 : 0;
     }
     case "claude-code":
     default: {

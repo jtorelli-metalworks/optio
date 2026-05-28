@@ -4,7 +4,7 @@
  */
 
 const GHCR_API = "https://ghcr.io/v2";
-const IMAGE_OWNER = process.env.OPTIO_IMAGE_OWNER ?? "jonwiggins";
+const IMAGE_OWNER = process.env.OPTIO_IMAGE_OWNER ?? "jtorelli-metalworks";
 const IMAGE_NAME = "optio-api";
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 

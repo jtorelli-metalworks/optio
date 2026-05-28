@@ -1,7 +1,7 @@
 # Optio Helm Chart — Recommended Production Values
 #
 # Install from GHCR (released chart):
-#   helm install optio oci://ghcr.io/jonwiggins/optio --version 1.0.0 \
+#   helm install optio oci://ghcr.io/jtorelli-metalworks/optio --version 1.0.0 \
 #     -n optio --create-namespace \
 #     -f values.production.yaml \
 #     --set encryption.key=<generated-key> \
@@ -18,7 +18,7 @@
 #     ...
 #
 # Upgrade to a new release:
-#   helm upgrade optio oci://ghcr.io/jonwiggins/optio --version 1.1.0 -n optio
+#   helm upgrade optio oci://ghcr.io/jtorelli-metalworks/optio --version 1.1.0 -n optio
 #
 # Generate encryption key: openssl rand -hex 32
 
