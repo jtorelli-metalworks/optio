@@ -13,6 +13,7 @@ import {
   parseRepoUrl,
   parsePrUrl,
   parseIntEnv,
+  resolveCodingModelsForTask,
 } from "@optio/shared";
 import { getAdapter } from "@optio/agent-adapters";
 import { parseClaudeEvent } from "../services/agent-event-parser.js";
@@ -98,6 +99,7 @@ export function startTaskWorker() {
           taskFileContent: string;
           taskFilePath: string;
           claudeModel?: string;
+          model?: string;
         };
       };
       const log = logger.child({ taskId, jobId: job.id });
@@ -344,12 +346,22 @@ export function startTaskWorker() {
           ticketUrl: (task.metadata as any)?.ticketUrl,
         });
 
+        const modelProfile = (task.metadata as { modelProfile?: string } | null)?.modelProfile;
+        const profileCoding = resolveCodingModelsForTask(modelProfile, repoConfig, task.agentType);
+
         // Apply review overrides if this is a review task
         const finalRenderedPrompt = reviewOverride?.renderedPrompt ?? renderedPrompt;
         const finalTaskFileContent = reviewOverride?.taskFileContent ?? taskFileContent;
         const finalTaskFilePath = reviewOverride?.taskFilePath ?? taskFilePath;
         const finalClaudeModel =
-          reviewOverride?.claudeModel ?? repoConfig?.claudeModel ?? undefined;
+          reviewOverride?.claudeModel ??
+          reviewOverride?.model ??
+          profileCoding.claudeModel ??
+          repoConfig?.claudeModel ??
+          undefined;
+        const finalCursorModel = profileCoding.cursorModel ?? repoConfig?.cursorModel ?? undefined;
+        const finalCopilotModel =
+          profileCoding.copilotModel ?? repoConfig?.copilotModel ?? undefined;
 
         const agentConfig = adapter.buildContainerConfig({
           taskId: task.id,
@@ -367,9 +379,9 @@ export function startTaskWorker() {
           claudeContextWindow: repoConfig?.claudeContextWindow ?? undefined,
           claudeThinking: repoConfig?.claudeThinking ?? undefined,
           claudeEffort: repoConfig?.claudeEffort ?? undefined,
-          copilotModel: repoConfig?.copilotModel ?? undefined,
+          copilotModel: finalCopilotModel,
           copilotEffort: repoConfig?.copilotEffort ?? undefined,
-          cursorModel: repoConfig?.cursorModel ?? undefined,
+          cursorModel: finalCursorModel,
           opencodeModel: repoConfig?.opencodeModel ?? opencodeDefaultModel,
           opencodeAgent: repoConfig?.opencodeAgent ?? undefined,
           opencodeBaseUrl: repoConfig?.opencodeBaseUrl ?? opencodeDefaultBaseUrl,

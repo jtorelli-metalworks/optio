@@ -5,6 +5,7 @@ import {
   renderPromptTemplate,
   parsePrUrl,
   parseRepoUrl,
+  resolveReviewModelsForTask,
 } from "@optio/shared";
 import * as taskService from "./task-service.js";
 import { getGitPlatformForRepo } from "./git-token-service.js";
@@ -99,10 +100,17 @@ export async function launchReview(parentTaskId: string): Promise<string> {
   const globalSettings = await optioSettingsService
     .getSettings(parentTask.workspaceId ?? null)
     .catch(() => null);
+  const parentModelProfile = (parentTask.metadata as { modelProfile?: string } | null)
+    ?.modelProfile;
+  const profileReview = resolveReviewModelsForTask(parentModelProfile, {
+    reviewAgentType: repoConfig?.reviewAgentType,
+    reviewModel: repoConfig?.reviewModel,
+    defaultAgentType: repoConfig?.defaultAgentType,
+  });
   const review = resolveReviewConfig({
-    repoReviewAgentType: repoConfig?.reviewAgentType ?? null,
+    repoReviewAgentType: profileReview.agentType ?? repoConfig?.reviewAgentType ?? null,
     repoDefaultAgentType: repoConfig?.defaultAgentType ?? null,
-    repoReviewModel: repoConfig?.reviewModel ?? null,
+    repoReviewModel: profileReview.model ?? repoConfig?.reviewModel ?? null,
     globalDefaultReviewAgentType: globalSettings?.defaultReviewAgentType ?? null,
     globalDefaultReviewModel: globalSettings?.defaultReviewModel ?? null,
   });

@@ -1,7 +1,7 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { taskConfigs, workflowTriggers } from "../db/schema.js";
-import { TaskState } from "@optio/shared";
+import { TaskState, modelProfileFromTriggerConfig } from "@optio/shared";
 import * as taskService from "./task-service.js";
 import { getPromptTemplateById, renderTemplateString } from "./prompt-template-service.js";
 import { logger } from "../logger.js";
@@ -131,7 +131,12 @@ export async function deleteTaskConfig(id: string): Promise<boolean> {
  */
 export async function instantiateTask(
   taskConfigId: string,
-  opts?: { triggerId?: string | null; params?: Record<string, unknown> | null },
+  opts?: {
+    triggerId?: string | null;
+    params?: Record<string, unknown> | null;
+    modelProfile?: string | null;
+    triggerConfig?: Record<string, unknown> | null;
+  },
 ) {
   const config = await getTaskConfig(taskConfigId);
   if (!config) throw new Error(`task_config ${taskConfigId} not found`);
@@ -158,6 +163,8 @@ export async function instantiateTask(
   const effectiveTitle = renderTemplateString(config.title, params);
 
   const agentType = effectiveAgentType ?? "claude-code";
+  const modelProfile =
+    opts?.modelProfile ?? modelProfileFromTriggerConfig(opts?.triggerConfig) ?? undefined;
 
   const task = await taskService.createTask({
     title: effectiveTitle,
@@ -172,6 +179,7 @@ export async function instantiateTask(
     metadata: {
       taskConfigId: config.id,
       taskConfigName: config.name,
+      ...(modelProfile ? { modelProfile } : {}),
       ...(opts?.triggerId ? { triggerId: opts.triggerId } : {}),
       ...(opts?.params ? { triggerParams: opts.params } : {}),
     },
@@ -334,6 +342,38 @@ export async function deleteTaskConfigTrigger(id: string): Promise<boolean> {
 }
 
 /**
+ * Returns true when an enabled task_config ticket trigger would handle this ticket,
+ * so ticket-sync can skip creating a duplicate repo-scoped task.
+ */
+export async function hasMatchingTaskConfigTrigger(ticket: {
+  source: string;
+  labels?: string[];
+}): Promise<boolean> {
+  const candidates = await db
+    .select()
+    .from(workflowTriggers)
+    .where(
+      and(
+        eq(workflowTriggers.targetType, "task_config"),
+        eq(workflowTriggers.type, "ticket"),
+        eq(workflowTriggers.enabled, true),
+      ),
+    );
+
+  for (const trigger of candidates) {
+    const config = (trigger.config ?? {}) as Record<string, unknown>;
+    if (config.source && config.source !== ticket.source) continue;
+    const requiredLabels = Array.isArray(config.labels) ? (config.labels as string[]) : null;
+    if (requiredLabels && requiredLabels.length > 0) {
+      const has = requiredLabels.some((l) => ticket.labels?.includes(l));
+      if (!has) continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
  * Fire any enabled `ticket` triggers on task_configs whose config matches the
  * ticket's source (and optional label filter). Called by ticket-sync-service
  * when it discovers an actionable ticket. Returns the instantiated tasks.
@@ -375,6 +415,7 @@ export async function fireTicketTriggers(ticket: {
     try {
       const task = await instantiateTask(trigger.targetId, {
         triggerId: trigger.id,
+        triggerConfig: config,
         params: {
           ticketSource: ticket.source,
           ticketExternalId: ticket.externalId,

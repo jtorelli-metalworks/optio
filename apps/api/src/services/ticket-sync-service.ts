@@ -139,6 +139,48 @@ export async function syncAllTickets(): Promise<number> {
               .join("\n");
         }
 
+        // When a task_config trigger owns this label, skip the generic repo-scoped
+        // task so we don't spawn duplicate work with mismatched model routing.
+        const handledByTaskConfig = await taskConfigService.hasMatchingTaskConfigTrigger({
+          source: ticket.source,
+          labels: ticket.labels,
+        });
+
+        if (handledByTaskConfig) {
+          try {
+            const fired = await taskConfigService.fireTicketTriggers({
+              source: ticket.source,
+              externalId: ticket.externalId,
+              title: ticket.title,
+              body: ticket.body,
+              labels: ticket.labels,
+              url: ticket.url,
+            });
+            if (fired.length > 0) {
+              const taskIds = fired.map((f) => f.taskId).join(", ");
+              try {
+                await provider.addComment(
+                  ticket.externalId,
+                  `🤖 **Optio** is working on this issue.\n\nTask ID(s): \`${taskIds}\``,
+                  mergedConfig,
+                );
+              } catch (commentErr) {
+                logger.warn(
+                  { err: commentErr, ticketId: ticket.externalId },
+                  "Failed to comment on ticket",
+                );
+              }
+              totalSynced++;
+            }
+          } catch (triggerErr) {
+            logger.warn(
+              { err: triggerErr, ticketId: ticket.externalId },
+              "Failed to fire ticket triggers for task_configs",
+            );
+          }
+          continue;
+        }
+
         // Resolve agent type: ticket label > repo default > "claude-code"
         const { getRepoByUrl } = await import("./repo-service.js");
         const repoConfig = await getRepoByUrl(repoUrl);

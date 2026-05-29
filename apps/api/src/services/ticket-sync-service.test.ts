@@ -49,6 +49,11 @@ vi.mock("./github-token-service.js", () => ({
   getGitHubToken: vi.fn(),
 }));
 
+vi.mock("./task-config-service.js", () => ({
+  hasMatchingTaskConfigTrigger: vi.fn().mockResolvedValue(false),
+  fireTicketTriggers: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("../logger.js", () => ({
   logger: {
     info: vi.fn(),
@@ -65,6 +70,7 @@ import * as taskService from "./task-service.js";
 import { taskQueue } from "../workers/task-worker.js";
 import { retrieveSecret } from "./secret-service.js";
 import { getGitHubToken } from "./github-token-service.js";
+import * as taskConfigService from "./task-config-service.js";
 import { syncAllTickets } from "./ticket-sync-service.js";
 import { logger } from "../logger.js";
 
@@ -109,6 +115,8 @@ function mockDbUpdate() {
 describe("ticket-sync-service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(taskConfigService.hasMatchingTaskConfigTrigger).mockResolvedValue(false);
+    vi.mocked(taskConfigService.fireTicketTriggers).mockResolvedValue([]);
     // Default: no secrets stored
     vi.mocked(retrieveSecret).mockRejectedValue(new Error("Secret not found"));
     // Default: no GitHub App / PAT available (triggers warn but doesn't throw)

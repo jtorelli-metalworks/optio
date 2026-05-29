@@ -34,3 +34,4 @@ export * from "./reconcile/reconcile-pr-review.js";
 export * from "./reconcile/reconcile-persistent-agent.js";
 export * from "./types/persistent-agent.js";
 export * from "./agent-options/index.js";
+export * from "./model-profile.js";
