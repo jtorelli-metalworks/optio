@@ -26,6 +26,12 @@ export const OPENAI_CATALOG: ProviderCatalog = {
       source: "baseline",
     },
     {
+      id: "gpt-5.3-codex",
+      label: "GPT-5.3 Codex",
+      family: "gpt-5",
+      source: "baseline",
+    },
+    {
       id: "gpt-5.4",
       label: "GPT-5.4",
       family: "gpt-5",
