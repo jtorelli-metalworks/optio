@@ -355,13 +355,17 @@ export function startTaskWorker() {
         const finalTaskFilePath = reviewOverride?.taskFilePath ?? taskFilePath;
         const finalClaudeModel =
           reviewOverride?.claudeModel ??
-          reviewOverride?.model ??
+          (reviewOverride?.model && task.agentType === "claude-code"
+            ? reviewOverride.model
+            : undefined) ??
           profileCoding.claudeModel ??
           repoConfig?.claudeModel ??
           undefined;
         const finalCursorModel = profileCoding.cursorModel ?? repoConfig?.cursorModel ?? undefined;
         const finalCopilotModel =
-          profileCoding.copilotModel ?? repoConfig?.copilotModel ?? undefined;
+          reviewOverride?.model && (task.agentType === "codex" || task.agentType === "copilot")
+            ? reviewOverride.model
+            : (profileCoding.copilotModel ?? repoConfig?.copilotModel ?? undefined);
 
         const agentConfig = adapter.buildContainerConfig({
           taskId: task.id,
