@@ -27,6 +27,8 @@ import {
   saveRepoPromptTemplate,
   listPromptTemplates,
   renderTemplateString,
+  resolveTemplateParam,
+  findUnresolvedTemplatePlaceholders,
 } from "./prompt-template-service.js";
 
 describe("renderTemplateString", () => {
@@ -75,6 +77,25 @@ describe("renderTemplateString", () => {
 
   it("treats null/undefined params as empty string", () => {
     expect(renderTemplateString("x={{v}}y", { v: null })).toBe("x=y");
+  });
+
+  it("substitutes dotted {{ticket.key}} paths from nested params", () => {
+    const result = renderTemplateString("{{ticket.key}}: {{ticket.summary}}", {
+      ticket: { key: "SCRUM-116", summary: "Voice assistant" },
+    });
+    expect(result).toBe("SCRUM-116: Voice assistant");
+  });
+
+  it("resolveTemplateParam supports dotted paths", () => {
+    const params = { ticket: { key: "SCRUM-1" } };
+    expect(resolveTemplateParam(params, "ticket.key")).toBe("SCRUM-1");
+    expect(resolveTemplateParam(params, "missing")).toBeUndefined();
+  });
+
+  it("findUnresolvedTemplatePlaceholders ignores if blocks", () => {
+    expect(findUnresolvedTemplatePlaceholders("{{ticket.key}} ok {{#if x}}y{{/if}}")).toEqual([
+      "ticket.key",
+    ]);
   });
 });
 

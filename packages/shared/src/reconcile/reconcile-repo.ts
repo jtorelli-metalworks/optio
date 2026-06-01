@@ -447,15 +447,29 @@ function decideFromPrStatus(snapshot: WorldSnapshot, allowFailComplete: boolean)
     return { kind: "launchReview", reason: "ci_passing_launch_review" };
   }
 
-  // First PR detection → trigger review if configured for on_pr.
-  if (
-    prev.checks === null &&
+  // Launch review on PR open (on_pr). Also covers missed first launch when
+  // prChecksStatus was already persisted before reconcile ran, and retries
+  // after a failed review subtask (capped by parent maxRetries).
+  const reviewStillPending = status.prReviewStatus === null || status.prReviewStatus === "pending";
+  const shouldLaunchOnPrReview =
     pr.state === "open" &&
     snapshot.settings.reviewEnabled &&
     snapshot.settings.reviewTrigger === "on_pr" &&
-    !snapshot.settings.hasReviewSubtask
-  ) {
-    return { kind: "launchReview", reason: "on_pr_launch_review" };
+    !snapshot.settings.hasReviewSubtask &&
+    reviewStillPending;
+
+  if (shouldLaunchOnPrReview) {
+    const failedBlockingCount = snapshot.blockingSubtasks.filter(
+      (s) => s.state === TaskState.FAILED,
+    ).length;
+    const maxReviewAttempts = Math.max(spec.maxRetries, 1);
+
+    if (prev.checks === null || snapshot.blockingSubtasks.length === 0) {
+      return { kind: "launchReview", reason: "on_pr_launch_review" };
+    }
+    if (failedBlockingCount > 0 && failedBlockingCount <= maxReviewAttempts) {
+      return { kind: "launchReview", reason: "on_pr_retry_failed_review" };
+    }
   }
 
   // Auto-merge path.

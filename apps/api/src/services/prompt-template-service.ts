@@ -152,28 +152,64 @@ export async function getPromptTemplateById(id: string) {
 }
 
 /**
+ * Resolve a template param by flat key or dotted path (e.g. ticket.key).
+ */
+export function resolveTemplateParam(
+  params: Record<string, unknown>,
+  key: string,
+): unknown | undefined {
+  if (Object.prototype.hasOwnProperty.call(params, key)) {
+    return params[key];
+  }
+  if (!key.includes(".")) return undefined;
+  let cur: unknown = params;
+  for (const part of key.split(".")) {
+    if (!cur || typeof cur !== "object" || !Object.prototype.hasOwnProperty.call(cur, part)) {
+      return undefined;
+    }
+    cur = (cur as Record<string, unknown>)[part];
+  }
+  return cur;
+}
+
+/** Returns placeholder names still present after rendering (e.g. ticket.key). */
+export function findUnresolvedTemplatePlaceholders(text: string): string[] {
+  const matches = text.matchAll(/\{\{\s*([#\/if\s\w.]+?)\s*\}\}/g);
+  const unresolved: string[] = [];
+  for (const match of matches) {
+    const token = match[1].trim();
+    if (token.startsWith("#if") || token.startsWith("/if")) continue;
+    unresolved.push(token);
+  }
+  return unresolved;
+}
+
+/**
  * Render a template string by substituting {{param}} placeholders with values
  * from the params bag. Unknown placeholders are left intact so callers can
- * detect missing params. Supports simple {{#if param}}...{{/if}} blocks too.
+ * detect missing params. Supports dotted paths ({{ticket.key}}) and simple
+ * {{#if param}}...{{/if}} blocks.
  */
 export function renderTemplateString(template: string, params: Record<string, unknown>): string {
   // Handle {{#if param}}...{{/if}} blocks first — keep the body if the param
   // is truthy, drop it otherwise.
   let rendered = template.replace(
-    /\{\{#if\s+(\w+)\s*\}\}([\s\S]*?)\{\{\/if\}\}/g,
+    /\{\{#if\s+([\w.]+)\s*\}\}([\s\S]*?)\{\{\/if\}\}/g,
     (_match, key: string, body: string) => {
-      const value = params[key];
+      const value = resolveTemplateParam(params, key);
       return value ? body : "";
     },
   );
 
-  // Simple {{param}} substitution.
-  rendered = rendered.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key: string) => {
-    if (Object.prototype.hasOwnProperty.call(params, key)) {
-      const value = params[key];
+  // {{param}} or {{ticket.key}} substitution.
+  rendered = rendered.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, key: string) => {
+    if (!Object.prototype.hasOwnProperty.call(params, key)) {
+      const value = resolveTemplateParam(params, key);
+      if (value === undefined) return match;
       return value == null ? "" : String(value);
     }
-    return match;
+    const value = params[key];
+    return value == null ? "" : String(value);
   });
 
   return rendered;

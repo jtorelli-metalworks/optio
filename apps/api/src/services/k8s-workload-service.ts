@@ -102,10 +102,35 @@ export class K8sWorkloadManager {
 
       const envChanged = JSON.stringify(currentEnv) !== JSON.stringify(desiredEnv);
       const serviceAccountChanged = currentServiceAccount !== desiredServiceAccount;
+      const currentResources = existingSts.spec?.template?.spec?.containers?.[0]?.resources ?? {};
+      const desiredResources = desiredPodTemplate.spec?.containers?.[0]?.resources ?? {};
+      const resourcesChanged =
+        JSON.stringify(currentResources) !== JSON.stringify(desiredResources);
+      const currentNodeSelector = existingSts.spec?.template?.spec?.nodeSelector ?? {};
+      const desiredNodeSelector = desiredPodTemplate.spec?.nodeSelector ?? {};
+      const nodeSelectorChanged =
+        JSON.stringify(currentNodeSelector) !== JSON.stringify(desiredNodeSelector);
+      const currentTolerations = existingSts.spec?.template?.spec?.tolerations ?? [];
+      const desiredTolerations = desiredPodTemplate.spec?.tolerations ?? [];
+      const tolerationsChanged =
+        JSON.stringify(currentTolerations) !== JSON.stringify(desiredTolerations);
 
-      if (envChanged || serviceAccountChanged) {
+      if (
+        envChanged ||
+        serviceAccountChanged ||
+        resourcesChanged ||
+        nodeSelectorChanged ||
+        tolerationsChanged
+      ) {
         logger.info(
-          { name, envChanged, serviceAccountChanged },
+          {
+            name,
+            envChanged,
+            serviceAccountChanged,
+            resourcesChanged,
+            nodeSelectorChanged,
+            tolerationsChanged,
+          },
           "StatefulSet pod template needs update",
         );
 

@@ -461,14 +461,31 @@ export async function optioChatWs(app: FastifyInstance) {
     ) => {
       const headers = buildAnthropicHeaders(auth);
 
+      // Prompt caching: the system prompt and tool schemas are large and
+      // identical on every turn of the loop (and across messages in a session),
+      // so we mark them with an ephemeral cache breakpoint. Anthropic caches the
+      // prefix (tools + system) and bills cache reads at ~10% of input rate on
+      // subsequent turns. A breakpoint on the system block also covers the tools
+      // that precede it in the request prefix; we add one on the final tool too
+      // so the tool schemas stay cached even when the system text changes.
+      const cachedSystem = [
+        { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+      ];
+      const cachedTools =
+        tools.length > 0
+          ? tools.map((tool, i) =>
+              i === tools.length - 1 ? { ...tool, cache_control: { type: "ephemeral" } } : tool,
+            )
+          : tools;
+
       for (let turn = 0; turn < maxTurns; turn++) {
         abortController = new AbortController();
 
         const body = {
           model,
-          system: systemPrompt,
+          system: cachedSystem,
           messages: conversationMessages,
-          ...(tools.length > 0 ? { tools } : {}),
+          ...(tools.length > 0 ? { tools: cachedTools } : {}),
           max_tokens: 4096,
           stream: true,
         };

@@ -3,7 +3,11 @@ import { db } from "../db/client.js";
 import { taskConfigs, workflowTriggers } from "../db/schema.js";
 import { TaskState, modelProfileFromTriggerConfig } from "@optio/shared";
 import * as taskService from "./task-service.js";
-import { getPromptTemplateById, renderTemplateString } from "./prompt-template-service.js";
+import {
+  getPromptTemplateById,
+  renderTemplateString,
+  findUnresolvedTemplatePlaceholders,
+} from "./prompt-template-service.js";
 import { logger } from "../logger.js";
 
 export interface CreateTaskConfigInput {
@@ -124,6 +128,35 @@ export async function deleteTaskConfig(id: string): Promise<boolean> {
   return deleted.length > 0;
 }
 
+/** Params passed to task_config templates from Jira/GitHub ticket triggers. */
+export function ticketTriggerParams(ticket: {
+  source: string;
+  externalId: string;
+  title: string;
+  body?: string;
+  labels?: string[];
+  url?: string;
+}): Record<string, unknown> {
+  const body = ticket.body ?? "";
+  return {
+    ticketSource: ticket.source,
+    ticketExternalId: ticket.externalId,
+    ticketTitle: ticket.title,
+    ticketBody: body,
+    ticketUrl: ticket.url ?? "",
+    ticketLabels: (ticket.labels ?? []).join(","),
+    ticket: {
+      key: ticket.externalId,
+      summary: ticket.title,
+      description: body,
+    },
+    // Flat legacy aliases.
+    ticketKey: ticket.externalId,
+    ticketSummary: ticket.title,
+    ticketDescription: body,
+  };
+}
+
 /**
  * Create a concrete task from a task_config blueprint, transition it into
  * the queue, and enqueue the BullMQ job. Mirrors the flow used by the
@@ -161,10 +194,29 @@ export async function instantiateTask(
     effectivePrompt = renderTemplateString(config.prompt, params);
   }
   const effectiveTitle = renderTemplateString(config.title, params);
+  const titlePlaceholders = findUnresolvedTemplatePlaceholders(effectiveTitle);
+  const promptPlaceholders = findUnresolvedTemplatePlaceholders(effectivePrompt);
+  if (titlePlaceholders.length > 0 || promptPlaceholders.length > 0) {
+    throw new Error(
+      `Unresolved template placeholders in task_config ${config.id}: ${[
+        ...titlePlaceholders,
+        ...promptPlaceholders,
+      ].join(", ")}`,
+    );
+  }
 
   const agentType = effectiveAgentType ?? "claude-code";
   const modelProfile =
     opts?.modelProfile ?? modelProfileFromTriggerConfig(opts?.triggerConfig) ?? undefined;
+
+  const ticketSource =
+    typeof params.ticketSource === "string" && params.ticketSource.length > 0
+      ? params.ticketSource
+      : undefined;
+  const ticketExternalId =
+    typeof params.ticketExternalId === "string" && params.ticketExternalId.length > 0
+      ? params.ticketExternalId
+      : undefined;
 
   const task = await taskService.createTask({
     title: effectiveTitle,
@@ -176,12 +228,15 @@ export async function instantiateTask(
     priority: config.priority,
     createdBy: config.createdBy ?? undefined,
     workspaceId: config.workspaceId ?? undefined,
+    ticketSource,
+    ticketExternalId,
     metadata: {
       taskConfigId: config.id,
       taskConfigName: config.name,
       ...(modelProfile ? { modelProfile } : {}),
       ...(opts?.triggerId ? { triggerId: opts.triggerId } : {}),
       ...(opts?.params ? { triggerParams: opts.params } : {}),
+      ...(params.ticketUrl ? { ticketUrl: params.ticketUrl } : {}),
     },
   });
 
@@ -416,14 +471,7 @@ export async function fireTicketTriggers(ticket: {
       const task = await instantiateTask(trigger.targetId, {
         triggerId: trigger.id,
         triggerConfig: config,
-        params: {
-          ticketSource: ticket.source,
-          ticketExternalId: ticket.externalId,
-          ticketTitle: ticket.title,
-          ticketBody: ticket.body ?? "",
-          ticketUrl: ticket.url ?? "",
-          ticketLabels: (ticket.labels ?? []).join(","),
-        },
+        params: ticketTriggerParams(ticket),
       });
       results.push({ triggerId: trigger.id, taskId: task.id });
       logger.info(

@@ -999,11 +999,19 @@ export async function execTaskInRepoPod(
         `  elif command -v gh >/dev/null 2>&1; then`,
         `    if gh pr view --json url -q .url >/tmp/optio-pr-url 2>/dev/null; then`,
         `      cat /tmp/optio-pr-url`,
+        `    elif printf '%s' "\${OPTIO_PR_TITLE:-}" | grep -q '{{'; then`,
+        `      echo "[optio] Skipping auto PR fallback: PR title has unresolved template placeholders (\${OPTIO_PR_TITLE})"`,
         `    else`,
         `      if [ -n "$(git status --porcelain --untracked-files=all)" ]; then`,
         `        git add -A`,
+        // Never include Optio's own scratch/runtime files in an auto PR. They are
+        // normally git-excluded, but defend against the exclude not being applied so
+        // we don't push junk PRs that contain only Optio infra files.
+        `        git reset -q -- .optio/ .optio-run-token .optio-cache/ local.properties 2>/dev/null || true`,
         `        if ! git diff --cached --quiet; then`,
         `          git commit -m "\${OPTIO_PR_TITLE:-Implement task $OPTIO_TASK_ID}"`,
+        `        else`,
+        `          echo "[optio] Skipping auto PR fallback: only Optio infra files changed, no real code"`,
         `        fi`,
         `      fi`,
         `      if git log --oneline "origin/\${OPTIO_REPO_BRANCH:-main}..HEAD" | grep -q .; then`,

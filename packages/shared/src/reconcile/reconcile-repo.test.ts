@@ -639,6 +639,48 @@ describe("reconcileRepo — PR_OPENED", () => {
     expect(reconcileRepo(s).kind).toBe("launchReview");
   });
 
+  it("on_pr review launches when checks already persisted but no review subtask yet", () => {
+    const s = snapshot({}, openedStatus({ prChecksStatus: "none" }), {
+      pr: makePr({ checksStatus: "none" }),
+      blockingSubtasks: [],
+      settings: {
+        stallThresholdMs: 300_000,
+        autoMerge: false,
+        cautiousMode: false,
+        autoResume: false,
+        reviewEnabled: true,
+        reviewTrigger: "on_pr",
+        offPeakOnly: false,
+        offPeakActive: false,
+        hasReviewSubtask: false,
+        maxAutoResumes: 10,
+        recentAutoResumeCount: 0,
+      },
+    });
+    expect(reconcileRepo(s).kind).toBe("launchReview");
+  });
+
+  it("on_pr review retries after failed review subtask", () => {
+    const s = snapshot({}, openedStatus({ prChecksStatus: "none", prReviewStatus: "pending" }), {
+      pr: makePr({ checksStatus: "none" }),
+      blockingSubtasks: [{ taskId: "review-1", state: TaskState.FAILED, blocksParent: true }],
+      settings: {
+        stallThresholdMs: 300_000,
+        autoMerge: false,
+        cautiousMode: false,
+        autoResume: false,
+        reviewEnabled: true,
+        reviewTrigger: "on_pr",
+        offPeakOnly: false,
+        offPeakActive: false,
+        hasReviewSubtask: false,
+        maxAutoResumes: 10,
+        recentAutoResumeCount: 0,
+      },
+    });
+    expect(reconcileRepo(s).kind).toBe("launchReview");
+  });
+
   it("auto-merge when CI passing and no subtasks blocking", () => {
     const s = snapshot({}, openedStatus({ prChecksStatus: "passing" }), {
       pr: makePr({ checksStatus: "passing" }),
