@@ -140,9 +140,17 @@ export function parseCodexEvent(
     return { entries, sessionId };
   }
 
-  // Error event
-  if (event.type === "error") {
-    const msg = event.message ?? event.error ?? JSON.stringify(event);
+  // Codex exec JSONL protocol (v0.13+): thread.turn.item.* events
+  if (event.type === "thread.started") {
+    const threadId = (event.thread_id ?? event.threadId) as string | undefined;
+    return { entries, sessionId: threadId ?? sessionId };
+  }
+
+  if (event.type === "turn.failed") {
+    const msg =
+      event.message ??
+      event.error?.message ??
+      (typeof event.error === "string" ? event.error : JSON.stringify(event.error ?? event));
     entries.push({
       taskId,
       timestamp,
@@ -150,7 +158,105 @@ export function parseCodexEvent(
       type: "error",
       content: msg,
     });
+    return { entries, sessionId, isTerminal: true };
+  }
+
+  if (event.type === "turn.completed") {
+    const usage = event.usage;
+    if (usage) {
+      const inputTokens = usage.input_tokens ?? usage.prompt_tokens ?? 0;
+      const outputTokens = usage.output_tokens ?? usage.completion_tokens ?? 0;
+      const meta: string[] = [];
+      if (inputTokens) meta.push(`${inputTokens} input tokens`);
+      if (outputTokens) meta.push(`${outputTokens} output tokens`);
+      if (meta.length) {
+        entries.push({
+          taskId,
+          timestamp,
+          sessionId,
+          type: "info",
+          content: `Usage: ${meta.join(" · ")}`,
+          metadata: { inputTokens, outputTokens },
+        });
+      }
+    }
+    return { entries, sessionId, isTerminal: true };
+  }
+
+  if (event.type === "item.started" || event.type === "item.updated") {
+    const item = event.item ?? {};
+    const itemType = item.type ?? item.item_type;
+    if (itemType === "command_execution") {
+      const cmd = item.command ?? item.cmd ?? "";
+      if (cmd) {
+        entries.push({
+          taskId,
+          timestamp,
+          sessionId,
+          type: "tool_use",
+          content: `$ ${String(cmd).split("\n")[0].slice(0, 120)}`,
+          metadata: { toolName: "shell" },
+        });
+      }
+    }
     return { entries, sessionId };
+  }
+
+  if (event.type === "item.completed") {
+    const item = event.item ?? {};
+    const itemType = item.type ?? item.item_type;
+    const text = item.text ?? item.content ?? "";
+    if (
+      (itemType === "agent_message" || itemType === "assistant_message") &&
+      typeof text === "string" &&
+      text.trim()
+    ) {
+      entries.push({
+        taskId,
+        timestamp,
+        sessionId,
+        type: "text",
+        content: text,
+      });
+    } else if (itemType === "command_execution") {
+      const cmd = item.command ?? item.cmd ?? "";
+      const output = item.output ?? item.result ?? "";
+      if (cmd) {
+        entries.push({
+          taskId,
+          timestamp,
+          sessionId,
+          type: "tool_use",
+          content: `$ ${String(cmd).split("\n")[0].slice(0, 120)}`,
+          metadata: { toolName: "shell" },
+        });
+      }
+      if (output && String(output).trim()) {
+        const trimmed =
+          String(output).length > 300 ? `${String(output).slice(0, 300)}…` : String(output);
+        entries.push({
+          taskId,
+          timestamp,
+          sessionId,
+          type: "tool_result",
+          content: trimmed,
+        });
+      }
+    }
+    return { entries, sessionId };
+  }
+
+  // Error event (legacy + thread.error)
+  if (event.type === "error") {
+    const msg = event.message ?? event.error?.message ?? event.error ?? JSON.stringify(event);
+    entries.push({
+      taskId,
+      timestamp,
+      sessionId,
+      type: "error",
+      content: typeof msg === "string" ? msg : JSON.stringify(msg),
+    });
+    return { entries, sessionId, isTerminal: true };
   }
 
   // Reasoning/thinking event (some Codex models output this)

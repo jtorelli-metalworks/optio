@@ -166,7 +166,48 @@ export class CodexAdapter implements AgentAdapter {
         continue;
       }
 
-      // Track assistant messages for summary
+      // Codex exec JSONL: { type: "turn.failed", ... }
+      if (event.type === "turn.failed") {
+        errorMessage =
+          event.message ??
+          event.error?.message ??
+          (typeof event.error === "string" ? event.error : JSON.stringify(event.error ?? event));
+        hasError = true;
+        continue;
+      }
+
+      // Codex exec JSONL: { type: "item.completed", item: { type: "agent_message", text: "..." } }
+      if (event.type === "item.completed") {
+        const item = event.item ?? {};
+        const itemType = item.type ?? item.item_type;
+        const text = item.text ?? item.content;
+        if (
+          (itemType === "agent_message" || itemType === "assistant_message") &&
+          typeof text === "string" &&
+          text.trim()
+        ) {
+          lastAssistantMessage = text;
+        }
+        const usage = event.usage ?? item.usage;
+        if (usage) {
+          if (usage.input_tokens) totalInputTokens += usage.input_tokens;
+          if (usage.output_tokens) totalOutputTokens += usage.output_tokens;
+        }
+        continue;
+      }
+
+      // Codex exec JSONL: { type: "turn.completed", usage: { ... } }
+      if (event.type === "turn.completed") {
+        const usage = event.usage;
+        if (usage) {
+          if (usage.input_tokens) totalInputTokens += usage.input_tokens;
+          if (usage.output_tokens) totalOutputTokens += usage.output_tokens;
+          if (usage.cached_input_tokens) totalCachedTokens += usage.cached_input_tokens;
+        }
+        continue;
+      }
+
+      // Track assistant messages for summary (legacy message events)
       if (event.type === "message" && event.role === "assistant" && event.content) {
         if (typeof event.content === "string") {
           lastAssistantMessage = event.content;
@@ -242,6 +283,9 @@ function truncate(s: string, maxLen: number): string {
 
 /** Detect common Codex/OpenAI error patterns in non-JSON output lines */
 function isRawTextError(line: string): boolean {
+  if (/command not found/i.test(line)) {
+    return true;
+  }
   // Auth / API key errors
   if (
     /error|failed|fatal/i.test(line) &&

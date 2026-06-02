@@ -603,7 +603,16 @@ export async function parseReviewOutput(runId: string): Promise<void> {
     .from(taskLogs)
     .where(eq(taskLogs.prReviewRunId, runId));
 
-  const parsed = extractVerdictJson(logs.map((l) => l.content).join("\n"));
+  const runMetadata = (run.metadata as Record<string, unknown> | null) ?? {};
+  const parseContent = [
+    runMetadata.draftFileContent,
+    runMetadata.agentOutput,
+    logs.map((l) => l.content).join("\n"),
+  ]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join("\n");
+
+  const parsed = extractVerdictJson(parseContent);
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (parsed?.verdict && ["approve", "request_changes", "comment"].includes(parsed.verdict)) {
@@ -616,6 +625,15 @@ export async function parseReviewOutput(runId: string): Promise<void> {
   if (!updates.summary && run.resultSummary) {
     if (!/^Agent (completed successfully|exited with code \d+)$/.test(run.resultSummary)) {
       updates.summary = run.resultSummary;
+    }
+  }
+
+  // Last resort: pull the latest platform review if the agent posted directly to GitHub.
+  if (!updates.summary) {
+    const platformReview = await fetchLatestPlatformReview(review, run.startedAt ?? run.createdAt);
+    if (platformReview) {
+      if (platformReview.summary) updates.summary = platformReview.summary;
+      if (platformReview.verdict && !updates.verdict) updates.verdict = platformReview.verdict;
     }
   }
 
@@ -651,6 +669,7 @@ export async function parseReviewOutput(runId: string): Promise<void> {
 function extractVerdictJson(
   content: string,
 ): { verdict?: string; summary?: string; fileComments?: unknown } | null {
+  if (!content.trim()) return null;
   const patterns = [
     /```(?:json)?\s*\n?(\{[\s\S]*?"verdict"[\s\S]*?\})\s*\n?```/,
     /(\{[\s\S]*?"verdict"\s*:\s*"[^"]*"[\s\S]*\})\s*$/m,
@@ -668,6 +687,32 @@ function extractVerdictJson(
     }
   }
   return null;
+}
+
+async function fetchLatestPlatformReview(
+  review: PrReview,
+  _since: Date,
+): Promise<{ verdict?: PrReviewVerdict; summary?: string } | null> {
+  try {
+    const { platform, ri } = await getGitPlatformForRepo(review.repoUrl, {
+      workspaceId: review.workspaceId,
+      server: true,
+    });
+    const reviews = await platform.getReviews(ri, review.prNumber);
+    const recent = [...reviews].reverse().find((r) => r.body?.trim());
+    if (!recent?.body) return null;
+
+    const state = (recent.state ?? "").toUpperCase();
+    let verdict: PrReviewVerdict | undefined;
+    if (state === "APPROVED") verdict = "approve";
+    else if (state === "CHANGES_REQUESTED") verdict = "request_changes";
+    else if (state === "COMMENTED" || state === "COMMENT") verdict = "comment";
+
+    return { verdict, summary: recent.body };
+  } catch (err) {
+    logger.warn({ err, prReviewId: review.id }, "Failed to fetch platform review fallback");
+    return null;
+  }
 }
 
 // ── Submit review ──────────────────────────────────────────────────────────

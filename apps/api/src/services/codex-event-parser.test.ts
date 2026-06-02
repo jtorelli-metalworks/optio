@@ -194,4 +194,41 @@ describe("parseCodexEvent", () => {
     const result = parseCodexEvent(line, TASK_ID);
     expect(result.entries).toHaveLength(0);
   });
+
+  it("parses codex exec item.completed agent_message", () => {
+    const line = JSON.stringify({
+      type: "item.completed",
+      item: { id: "item_0", type: "agent_message", text: "LGTM with one nit." },
+    });
+    const result = parseCodexEvent(line, TASK_ID);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].type).toBe("text");
+    expect(result.entries[0].content).toBe("LGTM with one nit.");
+  });
+
+  it("parses codex exec turn.failed as error", () => {
+    const line = JSON.stringify({
+      type: "turn.failed",
+      error: { message: "rate limit exceeded" },
+    });
+    const result = parseCodexEvent(line, TASK_ID);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].type).toBe("error");
+    expect(result.isTerminal).toBe(true);
+  });
+
+  it("parses codex exec command_execution item.completed", () => {
+    const line = JSON.stringify({
+      type: "item.completed",
+      item: {
+        id: "item_1",
+        type: "command_execution",
+        command: "gh pr diff 58",
+        output: "diff --git a/foo b/foo",
+      },
+    });
+    const result = parseCodexEvent(line, TASK_ID);
+    expect(result.entries.some((e) => e.type === "tool_use")).toBe(true);
+    expect(result.entries.some((e) => e.type === "tool_result")).toBe(true);
+  });
 });

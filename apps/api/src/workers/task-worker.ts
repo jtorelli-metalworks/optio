@@ -1206,7 +1206,7 @@ export function startTaskWorker() {
             detectedPrUrl,
           );
           log.info({ prUrl: detectedPrUrl }, "PR opened");
-        } else if (result.success || isReviewTask) {
+        } else if (result.success) {
           // External PR reviews no longer run here — they execute under
           // pr_review_runs via pr-review-worker.ts. Subtask reviews
           // (`taskType === "review"`) still flow through this path and
@@ -1856,7 +1856,12 @@ export function inferExitCode(agentType: string, logs: string): number {
   switch (agentType) {
     case "codex": {
       // Codex: look for error events in JSON output or OpenAI-specific failures
-      const hasErrorEvent = logs.includes('"type":"error"') || logs.includes('"type": "error"');
+      const hasErrorEvent =
+        logs.includes('"type":"error"') ||
+        logs.includes('"type": "error"') ||
+        logs.includes('"type":"turn.failed"') ||
+        logs.includes('"type": "turn.failed"');
+      const hasCommandNotFound = /codex:\s*command not found|command not found/i.test(logs);
       const hasApiErrorEnvelope = /"error"\s*:\s*\{\s*"message"/.test(logs);
       const hasAuthError =
         /OPENAI_API_KEY|invalid.*api.?key|unauthorized|authentication.*failed/i.test(logs);
@@ -1864,6 +1869,7 @@ export function inferExitCode(agentType: string, logs: string): number {
       const hasModelError = /model_not_found|model.*not found|does not exist.*model/i.test(logs);
       const hasContentFilter = /content.?filter|content.?policy|safety.?system/i.test(logs);
       return hasErrorEvent ||
+        hasCommandNotFound ||
         hasApiErrorEnvelope ||
         hasAuthError ||
         hasQuotaError ||

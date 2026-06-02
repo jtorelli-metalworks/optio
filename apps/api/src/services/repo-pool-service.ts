@@ -1182,6 +1182,30 @@ export async function releaseRepoPodTask(podId: string): Promise<void> {
 }
 
 /**
+ * Read a file from a task worktree inside a repo pod (best-effort).
+ */
+export async function readTaskWorktreeFile(
+  pod: RepoPod,
+  taskId: string,
+  relativePath: string,
+): Promise<string | null> {
+  const rt = getRuntime();
+  const handle: ContainerHandle = { id: pod.podId ?? pod.podName!, name: pod.podName! };
+  const session = await rt.exec(handle, [
+    "bash",
+    "-c",
+    `cat "/workspace/tasks/${taskId}/${relativePath}" 2>/dev/null || true`,
+  ]);
+  let output = "";
+  for await (const chunk of session.stdout as AsyncIterable<Buffer>) {
+    output += chunk.toString();
+  }
+  session.close();
+  const trimmed = output.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
  * Update worktree state for a task.
  */
 export async function updateWorktreeState(taskId: string, worktreeState: string): Promise<void> {

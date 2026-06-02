@@ -24,6 +24,7 @@ import {
   PrReviewRunState,
   PrReviewState,
   DEFAULT_STALL_THRESHOLD_MS,
+  PR_REVIEW_OUTPUT_PATH,
   type PresetImageId,
 } from "@optio/shared";
 import { getAdapter } from "@optio/agent-adapters";
@@ -648,7 +649,25 @@ export function startPrReviewWorker() {
 
         if (stderrData) {
           log.warn({ stderrPreview: stderrData.slice(0, 500) }, "Exec stderr");
+          allLogs += (allLogs.endsWith("\n") ? "" : "\n") + stderrData;
         }
+
+        let draftFileContent: string | null = null;
+        try {
+          draftFileContent = await repoPool.readTaskWorktreeFile(
+            pod,
+            run.id,
+            PR_REVIEW_OUTPUT_PATH,
+          );
+        } catch (err) {
+          log.warn({ err }, "Failed to read review draft file from worktree");
+        }
+
+        const runMetadata = {
+          ...((run.metadata as Record<string, unknown> | null) ?? {}),
+          agentOutput: allLogs.slice(-100_000),
+          ...(draftFileContent ? { draftFileContent } : {}),
+        };
 
         // ── Parse result ────────────────────────────────────────
         const inferredExitCode = inferExitCode(agentType, allLogs);
@@ -657,6 +676,7 @@ export function startPrReviewWorker() {
         const costFields: Record<string, unknown> = {
           resultSummary: result.summary,
           errorMessage: result.error ?? null,
+          metadata: runMetadata,
         };
         if (result.costUsd != null) costFields.costUsd = String(result.costUsd);
         if (result.inputTokens != null) costFields.inputTokens = result.inputTokens;
