@@ -432,11 +432,13 @@ export function startPersistentAgentWorker() {
         if (authDetection.matched) {
           success = false;
           effectiveError = `Auth failure: ${authDetection.excerpt ?? authDetection.pattern}`;
-          recordAuthEvent(
-            "claude",
-            authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
-            "persistent-agent-worker",
-          ).catch(() => {});
+          if (claimedAgent.agentRuntime === "claude-code") {
+            recordAuthEvent(
+              "claude",
+              authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
+              "persistent-agent-worker",
+            ).catch(() => {});
+          }
         }
 
         await paService.haltPersistentAgentTurn({

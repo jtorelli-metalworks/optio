@@ -1122,11 +1122,13 @@ export function startTaskWorker() {
           );
           result.success = false;
           result.error = `Agent authentication failed: ${authDetection.excerpt ?? authDetection.pattern}`;
-          recordAuthEvent(
-            "claude",
-            authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
-            "task-worker",
-          ).catch(() => {});
+          if (task.agentType === "claude-code") {
+            recordAuthEvent(
+              "claude",
+              authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
+              "task-worker",
+            ).catch(() => {});
+          }
         }
 
         await taskService.updateTaskResult(taskId, result.summary, result.error);

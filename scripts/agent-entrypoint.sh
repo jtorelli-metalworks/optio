@@ -138,7 +138,7 @@ home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
 home.mkdir(parents=True, exist_ok=True)
 cfg = home / "config.toml"
 worktree = os.getcwd()
-paths = {worktree: "trusted", "/workspace/repo": "trusted"}
+paths = {worktree: "trusted", "/workspace/repo": "trusted", "/workspace/tasks": "trusted"}
 lines = cfg.read_text().splitlines() if cfg.exists() else []
 for path, level in paths.items():
     header = f'[projects."{path}"]'

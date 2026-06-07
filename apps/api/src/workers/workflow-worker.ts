@@ -571,11 +571,13 @@ export function startWorkflowWorker() {
             { pattern: authDetection.pattern, excerpt: authDetection.excerpt },
             "Auth failure detected in agent output — overriding result",
           );
-          recordAuthEvent(
-            "claude",
-            authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
-            "workflow-worker",
-          ).catch(() => {});
+          if (workflow.agentRuntime === "claude-code") {
+            recordAuthEvent(
+              "claude",
+              authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
+              "workflow-worker",
+            ).catch(() => {});
+          }
         }
 
         const costFields: Record<string, unknown> = {};

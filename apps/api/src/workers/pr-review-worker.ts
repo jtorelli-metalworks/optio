@@ -696,11 +696,13 @@ export function startPrReviewWorker() {
           );
           result.success = false;
           result.error = `Agent authentication failed: ${authDetection.excerpt ?? authDetection.pattern}`;
-          recordAuthEvent(
-            "claude",
-            authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
-            "pr-review-worker",
-          ).catch(() => {});
+          if (agentType === "claude-code") {
+            recordAuthEvent(
+              "claude",
+              authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
+              "pr-review-worker",
+            ).catch(() => {});
+          }
         }
 
         const costFields: Record<string, unknown> = {
