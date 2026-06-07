@@ -123,6 +123,22 @@ describe("CodexAdapter", () => {
       const config = adapter.buildContainerConfig(baseInput);
       expect(config.env.OPTIO_CODEX_AUTH_MODE).toBe("api-key");
     });
+
+    it("sets COPILOT_MODEL env var when copilotModel is provided", () => {
+      const config = adapter.buildContainerConfig({
+        ...baseInput,
+        copilotModel: "gpt-5.3-codex",
+      });
+      expect(config.env.COPILOT_MODEL).toBe("gpt-5.3-codex");
+    });
+
+    it("sets CODEX_REASONING_EFFORT env var when copilotEffort is provided", () => {
+      const config = adapter.buildContainerConfig({
+        ...baseInput,
+        copilotEffort: "xhigh",
+      });
+      expect(config.env.CODEX_REASONING_EFFORT).toBe("xhigh");
+    });
   });
 
   describe("parseResult", () => {
@@ -257,6 +273,13 @@ describe("CodexAdapter", () => {
       const result = adapter.parseResult(1, logs);
       expect(result.success).toBe(false);
       expect(result.error).toContain("model_not_found");
+    });
+
+    it("does not treat Kotlin domain.model diff text as a model error", () => {
+      const logs =
+        'import com.example.domain.model.Recipe\\n...return Result.Error(Exception("Recipe not found"))';
+      const result = adapter.parseResult(0, logs);
+      expect(result.success).toBe(true);
     });
 
     it("detects context length exceeded in raw text", () => {

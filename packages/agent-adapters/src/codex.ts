@@ -77,6 +77,13 @@ export class CodexAdapter implements AgentAdapter {
       requiredSecrets.push("OPENAI_API_KEY");
     }
 
+    if (input.copilotModel) {
+      env.COPILOT_MODEL = input.copilotModel;
+    }
+    if (input.copilotEffort) {
+      env.CODEX_REASONING_EFFORT = input.copilotEffort;
+    }
+
     const setupFiles: AgentContainerConfig["setupFiles"] = [];
 
     // Write the task file into the worktree
@@ -293,8 +300,8 @@ function isRawTextError(line: string): boolean {
   ) {
     return true;
   }
-  // Model not found
-  if (/model.*not found|model_not_found|does not exist|invalid.*model/i.test(line)) {
+  // Model not found (avoid matching Kotlin `domain.model.*` … `Recipe not found` in diff text)
+  if (isModelErrorText(line)) {
     return true;
   }
   // Context length exceeded
@@ -310,4 +317,14 @@ function isRawTextError(line: string): boolean {
     return true;
   }
   return false;
+}
+
+/** OpenAI/Codex model errors — must not match package paths like `domain.model.Foo`. */
+function isModelErrorText(text: string): boolean {
+  return (
+    /\bmodel_not_found\b/i.test(text) ||
+    /(?:^|[^.\w])model\b[^\n]{0,120}\bnot found\b/i.test(text) ||
+    /(?:^|[^.\w])model\b[^\n]{0,120}\bdoes not exist\b/i.test(text) ||
+    /\binvalid\b[^\n]{0,80}\bmodel\b/i.test(text)
+  );
 }

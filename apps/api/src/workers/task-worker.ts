@@ -22,7 +22,11 @@ import { parseCopilotEvent } from "../services/copilot-event-parser.js";
 import { parseOpenCodeEvent } from "../services/opencode-event-parser.js";
 import { parseGeminiEvent } from "../services/gemini-event-parser.js";
 import { parseOpenClawEvent } from "../services/openclaw-event-parser.js";
-import { checkExistingPr, type ExistingPr } from "../services/pr-detection-service.js";
+import {
+  checkExistingPr,
+  checkExistingPrWithRetry,
+  type ExistingPr,
+} from "../services/pr-detection-service.js";
 import { db } from "../db/client.js";
 import { tasks } from "../db/schema.js";
 import { eq, sql } from "drizzle-orm";
@@ -40,6 +44,7 @@ import { getCredentialSecret } from "../services/credential-secret-service.js";
 import { subscribeToTaskMessages } from "../services/task-message-bus.js";
 import * as messageService from "../services/task-message-service.js";
 import { detectAuthFailureInLogs, recordAuthEvent } from "../services/auth-failure-detector.js";
+import { buildCodexAgentCommandLines } from "../services/codex-shell.js";
 import { logger } from "../logger.js";
 import {
   recordTaskComplete,
@@ -100,6 +105,7 @@ export function startTaskWorker() {
           taskFilePath: string;
           claudeModel?: string;
           model?: string;
+          effort?: string;
         };
       };
       const log = logger.child({ taskId, jobId: job.id });
@@ -366,6 +372,10 @@ export function startTaskWorker() {
           reviewOverride?.model && (task.agentType === "codex" || task.agentType === "copilot")
             ? reviewOverride.model
             : (profileCoding.copilotModel ?? repoConfig?.copilotModel ?? undefined);
+        const finalCopilotEffort =
+          reviewOverride?.effort && (task.agentType === "codex" || task.agentType === "copilot")
+            ? reviewOverride.effort
+            : (repoConfig?.copilotEffort ?? undefined);
 
         const agentConfig = adapter.buildContainerConfig({
           taskId: task.id,
@@ -384,7 +394,7 @@ export function startTaskWorker() {
           claudeThinking: repoConfig?.claudeThinking ?? undefined,
           claudeEffort: repoConfig?.claudeEffort ?? undefined,
           copilotModel: finalCopilotModel,
-          copilotEffort: repoConfig?.copilotEffort ?? undefined,
+          copilotEffort: finalCopilotEffort,
           cursorModel: finalCursorModel,
           opencodeModel: repoConfig?.opencodeModel ?? opencodeDefaultModel,
           opencodeAgent: repoConfig?.opencodeAgent ?? undefined,
@@ -855,6 +865,12 @@ export function startTaskWorker() {
           } catch (err) {
             log.warn({ err }, "Failed to write initial prompt to claude stdin");
           }
+        } else if (task.agentType === "codex" || task.agentType === "copilot") {
+          try {
+            execSession.stdin.end();
+          } catch (err) {
+            log.warn({ err }, "Failed to close agent stdin");
+          }
         }
 
         // Stream stdout with structured parsing
@@ -1181,17 +1197,44 @@ export function startTaskWorker() {
           (allLogs.includes('"subtype":"init"') ||
             allLogs.includes('"subtype": "init"') ||
             allLogs.includes('"type":"message"'));
-        if (!sessionId && !isReviewTask && !cursorHadStreamOutput) {
-          // Agent never started — no session ID means no agent output was produced.
-          // Cursor emits session_id on init NDJSON; cursorHadStreamOutput is a fallback.
-          await repoPool.updateWorktreeState(taskId, "dirty");
-          await taskService.transitionTask(
+        const agentHadOutput = allLogs.trim().length > 0 || stderrData.trim().length > 0;
+        if (
+          !detectedPrUrl &&
+          !agentHadOutput &&
+          !sessionId &&
+          !isReviewTask &&
+          !cursorHadStreamOutput
+        ) {
+          const apiFallbackPr = await checkExistingPrWithRetry(
+            task.repoUrl,
             taskId,
-            TaskState.FAILED,
-            "agent_no_output",
-            "Agent process exited without producing any output",
+            taskWorkspaceId,
           );
-          log.warn("Agent exited without output — no session ID captured");
+          if (apiFallbackPr) {
+            await taskService.updateTaskPr(taskId, apiFallbackPr.url);
+            await repoPool.updateWorktreeState(taskId, "preserved");
+            await taskService.transitionTask(
+              taskId,
+              TaskState.PR_OPENED,
+              "pr_detected_api",
+              apiFallbackPr.url,
+            );
+            log.info(
+              { prUrl: apiFallbackPr.url },
+              "PR found via API fallback after no-output agent exit",
+            );
+          } else {
+            // Agent never started — no session ID means no agent output was produced.
+            // Cursor emits session_id on init NDJSON; cursorHadStreamOutput is a fallback.
+            await repoPool.updateWorktreeState(taskId, "dirty");
+            await taskService.transitionTask(
+              taskId,
+              TaskState.FAILED,
+              "agent_no_output",
+              "Agent process exited without producing any output",
+            );
+            log.warn("Agent exited without output — no session ID captured");
+          }
         } else if (detectedPrUrl && !isReviewTask) {
           // PR exists — go to pr_opened regardless of exit code.
           if (detectedPrUrl !== taskAfterExec?.prUrl) {
@@ -1236,7 +1279,7 @@ export function startTaskWorker() {
             // that wasn't captured in log output.
             let apiFallbackPr: ExistingPr | null = null;
             try {
-              apiFallbackPr = await checkExistingPr(task.repoUrl, taskId, taskWorkspaceId);
+              apiFallbackPr = await checkExistingPrWithRetry(task.repoUrl, taskId, taskWorkspaceId);
             } catch {
               // Non-fatal — proceed with escalation
             }
@@ -1282,7 +1325,7 @@ export function startTaskWorker() {
           let apiFallbackPr: ExistingPr | null = null;
           if (!isReviewTask) {
             try {
-              apiFallbackPr = await checkExistingPr(task.repoUrl, taskId, taskWorkspaceId);
+              apiFallbackPr = await checkExistingPrWithRetry(task.repoUrl, taskId, taskWorkspaceId);
             } catch {
               // Non-fatal — proceed with failure
             }
@@ -1762,16 +1805,8 @@ export function buildAgentCommand(
         `  ${modelFlag} ${resumeFlag}`.trim(),
       ];
     }
-    case "codex": {
-      const appServerFlag =
-        env.OPTIO_CODEX_AUTH_MODE === "app-server" && env.OPTIO_CODEX_APP_SERVER_URL
-          ? ` --app-server ${JSON.stringify(env.OPTIO_CODEX_APP_SERVER_URL)}`
-          : "";
-      return [
-        `echo "[optio] Running OpenAI Codex${appServerFlag ? " (app-server)" : ""}..."`,
-        `codex exec --full-auto "$OPTIO_PROMPT"${appServerFlag} --json`,
-      ];
-    }
+    case "codex":
+      return buildCodexAgentCommandLines(env);
     case "copilot": {
       const modelFlag = env.COPILOT_MODEL ? ` --model ${JSON.stringify(env.COPILOT_MODEL)}` : "";
       const effortFlag = env.COPILOT_EFFORT ? ` --effort ${env.COPILOT_EFFORT}` : "";
@@ -1861,12 +1896,14 @@ export function inferExitCode(agentType: string, logs: string): number {
         logs.includes('"type": "error"') ||
         logs.includes('"type":"turn.failed"') ||
         logs.includes('"type": "turn.failed"');
-      const hasCommandNotFound = /codex:\s*command not found|command not found/i.test(logs);
+      const hasCommandNotFound = hasCodexCommandNotFound(logs);
       const hasApiErrorEnvelope = /"error"\s*:\s*\{\s*"message"/.test(logs);
       const hasAuthError =
-        /OPENAI_API_KEY|invalid.*api.?key|unauthorized|authentication.*failed/i.test(logs);
+        /OPENAI_API_KEY|invalid.*api.?key|unauthorized|authentication.*failed|Missing bearer or basic authentication/i.test(
+          logs,
+        );
       const hasQuotaError = /quota|insufficient_quota|billing/i.test(logs);
-      const hasModelError = /model_not_found|model.*not found|does not exist.*model/i.test(logs);
+      const hasModelError = hasCodexModelError(logs);
       const hasContentFilter = /content.?filter|content.?policy|safety.?system/i.test(logs);
       return hasErrorEvent ||
         hasCommandNotFound ||
@@ -1979,4 +2016,70 @@ export function inferExitCode(agentType: string, logs: string): number {
       return 0;
     }
   }
+}
+
+function hasCodexCommandNotFound(logs: string): boolean {
+  return logs.split("\n").some((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    try {
+      JSON.parse(trimmed);
+      // Nested shell "command not found" in gh/diff output is not a Codex startup failure.
+      return false;
+    } catch {
+      return /^codex:\s*command not found/i.test(trimmed);
+    }
+  });
+}
+
+function hasCodexModelError(logs: string): boolean {
+  return logs.split("\n").some((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (!isRecord(parsed)) return false;
+
+      const event = parsed;
+      const error = event.error;
+      if (isRecord(error)) {
+        const code = stringValue(error.code);
+        const type = stringValue(error.type);
+        const message = stringValue(error.message);
+        return (
+          code === "model_not_found" ||
+          type === "model_not_found" ||
+          (message != null && isModelErrorText(message))
+        );
+      }
+
+      const eventType = stringValue(event.type);
+      if (eventType === "error" || eventType === "turn.failed") {
+        const message = stringValue(event.message) ?? stringValue(event.error);
+        return message != null && isModelErrorText(message);
+      }
+    } catch {
+      return isModelErrorText(trimmed);
+    }
+
+    return false;
+  });
+}
+
+function isModelErrorText(text: string): boolean {
+  return (
+    /\bmodel_not_found\b/i.test(text) ||
+    /(?:^|[^.\w])model\b[^\n]{0,120}\bnot found\b/i.test(text) ||
+    /(?:^|[^.\w])model\b[^\n]{0,120}\bdoes not exist\b/i.test(text) ||
+    /\binvalid\b[^\n]{0,80}\bmodel\b/i.test(text)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }

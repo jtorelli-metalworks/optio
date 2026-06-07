@@ -39,7 +39,7 @@ export async function checkExistingPr(
 
   let platform;
   try {
-    const result = await getGitPlatformForRepo(repoUrl, { server: true });
+    const result = await getGitPlatformForRepo(repoUrl, { server: true, workspaceId });
     platform = result.platform;
   } catch {
     logger.debug("No git token available — skipping existing PR check");
@@ -63,4 +63,29 @@ export async function checkExistingPr(
     logger.debug({ err }, "Failed to check for existing PR");
     return null;
   }
+}
+
+export async function checkExistingPrWithRetry(
+  repoUrl: string,
+  taskId: string,
+  workspaceId: string | null,
+  opts: { attempts?: number; delayMs?: number } = {},
+): Promise<ExistingPr | null> {
+  const attempts = Math.max(1, opts.attempts ?? 3);
+  const delayMs = Math.max(0, opts.delayMs ?? 1_500);
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const existingPr = await checkExistingPr(repoUrl, taskId, workspaceId);
+    if (existingPr) return existingPr;
+
+    if (attempt < attempts && delayMs > 0) {
+      await sleep(delayMs);
+    }
+  }
+
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -6,3 +6,6 @@ dist
 *.tsbuildinfo
 .env
 .values.local.yaml
+**/values.*.secrets.yaml
+*middensoft*
+.optio-run-token

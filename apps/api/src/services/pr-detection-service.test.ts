@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { parseOwnerRepo, checkExistingPr } from "./pr-detection-service.js";
+import {
+  parseOwnerRepo,
+  checkExistingPr,
+  checkExistingPrWithRetry,
+} from "./pr-detection-service.js";
 
 // Mock git-token-service
 const mockPlatform = {
@@ -167,6 +171,43 @@ describe("checkExistingPr", () => {
 
     expect(mockGetGitPlatformForRepo).toHaveBeenCalledWith("https://github.com/owner/repo", {
       server: true,
+      workspaceId: "workspace-42",
     });
+  });
+
+  it("retries when a PR is not immediately visible", async () => {
+    mockPlatform.listOpenPullRequests.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        url: "https://github.com/owner/repo/pull/43",
+        number: 43,
+        state: "open",
+        title: "",
+        body: "",
+        merged: false,
+        mergeable: true,
+        draft: false,
+        headSha: "abc",
+        baseBranch: "main",
+        author: "",
+        assignees: [],
+        labels: [],
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+
+    const result = await checkExistingPrWithRetry(
+      "https://github.com/owner/repo",
+      "task-late",
+      "workspace-42",
+      { attempts: 2, delayMs: 0 },
+    );
+
+    expect(result).toEqual({
+      url: "https://github.com/owner/repo/pull/43",
+      number: 43,
+      state: "open",
+    });
+    expect(mockPlatform.listOpenPullRequests).toHaveBeenCalledTimes(2);
   });
 });

@@ -35,6 +35,7 @@ import { parseCodexEvent } from "../services/codex-event-parser.js";
 import { parseCopilotEvent } from "../services/copilot-event-parser.js";
 import { parseOpenCodeEvent } from "../services/opencode-event-parser.js";
 import { parseGeminiEvent } from "../services/gemini-event-parser.js";
+import { buildCodexAgentCommandLines } from "../services/codex-shell.js";
 import { enqueueReconcile } from "../services/reconcile-queue.js";
 import { getBullMQConnectionOptions } from "../services/redis-config.js";
 import { logger } from "../logger.js";
@@ -141,10 +142,7 @@ function buildAgentCommand(
       ];
     }
     case "codex":
-      return [
-        `echo "[optio] Running persistent agent turn (Codex)..."`,
-        `codex exec --full-auto "$OPTIO_PROMPT" --json`,
-      ];
+      return buildCodexAgentCommandLines(env, "persistent agent turn (Codex)");
     case "copilot": {
       const modelFlag = env.COPILOT_MODEL ? ` --model ${JSON.stringify(env.COPILOT_MODEL)}` : "";
       return [

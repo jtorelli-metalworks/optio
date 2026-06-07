@@ -120,7 +120,45 @@ case "${OPTIO_AGENT_TYPE}" in
     ;;
   codex)
     echo "[optio] Running OpenAI Codex..."
-    codex exec --full-auto "${OPTIO_PROMPT}" --json
+    if [ "${OPTIO_CODEX_AUTH_MODE:-api-key}" = "api-key" ]; then
+      if [ -z "${OPENAI_API_KEY:-}" ]; then
+        echo "[optio] ERROR: OPENAI_API_KEY is required for Codex api-key mode" >&2
+        exit 1
+      fi
+      mkdir -p "${CODEX_HOME:-$HOME/.codex}"
+      rm -f "${CODEX_HOME:-$HOME/.codex}/auth.json"
+      printf '%s' "$OPENAI_API_KEY" | codex login --with-api-key
+    fi
+    mkdir -p "${CODEX_HOME:-$HOME/.codex}"
+    WORKTREE="$(pwd)"
+    python3 - <<'PY'
+import os
+from pathlib import Path
+home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+home.mkdir(parents=True, exist_ok=True)
+cfg = home / "config.toml"
+worktree = os.getcwd()
+paths = {worktree: "trusted", "/workspace/repo": "trusted"}
+lines = cfg.read_text().splitlines() if cfg.exists() else []
+for path, level in paths.items():
+    header = f'[projects."{path}"]'
+    if any(l.strip() == header for l in lines):
+        continue
+    if lines and lines[-1].strip():
+        lines.append("")
+    lines.extend([header, f'trust_level = "{level}"'])
+cfg.write_text("\n".join(lines) + ("\n" if lines else ""))
+PY
+    MODEL_FLAG=""
+    if [ -n "${COPILOT_MODEL:-}" ]; then
+      MODEL_FLAG=" --model ${COPILOT_MODEL}"
+    fi
+    REASONING_FLAG=""
+    CODEX_EFFORT="${CODEX_REASONING_EFFORT:-${OPTIO_CODEX_REASONING_EFFORT:-}}"
+    if [ -n "${CODEX_EFFORT}" ]; then
+      REASONING_FLAG=" -c model_reasoning_effort=\"${CODEX_EFFORT}\""
+    fi
+    codex exec --sandbox danger-full-access${MODEL_FLAG}${REASONING_FLAG} "${OPTIO_PROMPT}" --json </dev/null
     ;;
   copilot)
     echo "[optio] Running GitHub Copilot..."

@@ -61,6 +61,7 @@ vi.mock("./optio-settings-service.js", () => ({
 }));
 
 import { db } from "../db/client.js";
+import { resetModelProfilesCache } from "@optio/shared";
 import { launchReview } from "./review-service.js";
 
 // ── launchReview ────────────────────────────────────────────────────
@@ -68,6 +69,8 @@ import { launchReview } from "./review-service.js";
 describe("launchReview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.OPTIO_MODEL_PROFILES_JSON;
+    resetModelProfilesCache();
   });
 
   it("throws when parent task is not found", async () => {
@@ -155,6 +158,68 @@ describe("launchReview", () => {
       expect.objectContaining({
         priority: 10,
       }),
+    );
+  });
+
+  it("passes profile review effort into Codex review overrides", async () => {
+    process.env.OPTIO_MODEL_PROFILES_JSON = JSON.stringify({
+      profiles: {
+        standard: {
+          coding: { provider: "cursor", model: "composer-2.5", agentType: "cursor" },
+          review: {
+            provider: "openai",
+            model: "gpt-5.3-codex",
+            agentType: "codex",
+            effort: "xhigh",
+          },
+        },
+      },
+    });
+    resetModelProfilesCache();
+
+    mockGetTask.mockResolvedValueOnce({
+      id: "task-profile",
+      title: "Implement profile feature",
+      prompt: "Add profile feature",
+      prUrl: "https://github.com/org/repo/pull/43",
+      repoUrl: "https://github.com/org/repo.git",
+      metadata: { modelProfile: "standard" },
+    });
+
+    vi.mocked(db.select().from(undefined as any).where as any)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          defaultAgentType: "cursor",
+          reviewAgentType: "codex",
+          reviewModel: "gpt-5.3-codex",
+        },
+      ]);
+
+    mockCreateSubtask.mockResolvedValueOnce({
+      id: "review-profile",
+      title: "Review: Implement profile feature",
+    });
+    mockTransitionTask.mockResolvedValueOnce({ id: "review-profile", state: "queued" });
+
+    await launchReview("task-profile");
+
+    expect(mockCreateSubtask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentTaskId: "task-profile",
+        agentType: "codex",
+      }),
+    );
+    expect(mockQueueAdd).toHaveBeenCalledWith(
+      "process-task",
+      expect.objectContaining({
+        taskId: "review-profile",
+        reviewOverride: expect.objectContaining({
+          model: "gpt-5.3-codex",
+          effort: "xhigh",
+        }),
+      }),
+      expect.objectContaining({ priority: 10 }),
     );
   });
 

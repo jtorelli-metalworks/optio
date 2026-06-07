@@ -29,6 +29,7 @@ import {
 } from "@optio/shared";
 import { getAdapter } from "@optio/agent-adapters";
 import { db } from "../db/client.js";
+import { logger } from "../logger.js";
 import { prReviews, prReviewRuns, taskLogs } from "../db/schema.js";
 import { parseClaudeEvent } from "../services/agent-event-parser.js";
 import { parseCodexEvent } from "../services/codex-event-parser.js";
@@ -47,7 +48,7 @@ import { getCredentialSecret } from "../services/credential-secret-service.js";
 import { publishEvent } from "../services/event-bus.js";
 import { getBullMQConnectionOptions } from "../services/redis-config.js";
 import { instrumentWorkerProcessor } from "../telemetry/instrument-worker.js";
-import { logger } from "../logger.js";
+import { detectAuthFailureInLogs, recordAuthEvent } from "../services/auth-failure-detector.js";
 import * as prReviewService from "../services/pr-review-service.js";
 import { enqueueReconcile } from "../services/reconcile-queue.js";
 import { resolveReviewConfig } from "../services/review-config.js";
@@ -294,7 +295,9 @@ export function startPrReviewWorker() {
         const claudeModel =
           agentType === "claude-code" ? resolvedModel : (repoConfig.claudeModel ?? undefined);
         const copilotModel =
-          agentType === "copilot" ? resolvedModel : (repoConfig.copilotModel ?? undefined);
+          agentType === "copilot" || agentType === "codex"
+            ? resolvedModel
+            : (repoConfig.copilotModel ?? undefined);
         const opencodeModel =
           agentType === "opencode"
             ? resolvedModel
@@ -438,7 +441,12 @@ export function startPrReviewWorker() {
         );
         const allEnv: Record<string, string> = { ...agentConfig.env, ...resolvedSecrets };
 
-        for (const secretName of ["GITHUB_TOKEN", "GITLAB_TOKEN", "GITLAB_HOST"]) {
+        for (const secretName of [
+          "GITHUB_TOKEN",
+          "GITLAB_TOKEN",
+          "GITLAB_HOST",
+          "GITHUB_REVIEW_TOKEN",
+        ]) {
           if (!allEnv[secretName]) {
             const val = await retrieveSecretWithFallback(secretName, "global", workspaceId).catch(
               () => null,
@@ -546,12 +554,19 @@ export function startPrReviewWorker() {
 
         const execSession = await repoPool.execTaskInRepoPod(pod, run.id, agentCommand, allEnv);
 
-        // For claude, seed the stream-json stdin with the initial prompt.
+        // Claude runs with `--input-format stream-json`; other agents must not
+        // inherit an open (empty) k8s exec stdin — Codex 0.136 blocks on it.
         if (agentType === "claude-code") {
           try {
             execSession.stdin.write(buildInitialClaudeStreamMessage(allEnv.OPTIO_PROMPT ?? ""));
           } catch (err) {
             log.warn({ err }, "Failed to write initial claude stdin");
+          }
+        } else if (agentType === "codex" || agentType === "copilot") {
+          try {
+            execSession.stdin.end();
+          } catch (err) {
+            log.warn({ err }, "Failed to close agent stdin");
           }
         }
 
@@ -672,6 +687,21 @@ export function startPrReviewWorker() {
         // ── Parse result ────────────────────────────────────────
         const inferredExitCode = inferExitCode(agentType, allLogs);
         const result = adapter.parseResult(inferredExitCode, allLogs);
+
+        const authDetection = detectAuthFailureInLogs(allLogs);
+        if (authDetection.matched && result.success) {
+          log.warn(
+            { pattern: authDetection.pattern, excerpt: authDetection.excerpt },
+            "Auth failure detected in review agent output — overriding result",
+          );
+          result.success = false;
+          result.error = `Agent authentication failed: ${authDetection.excerpt ?? authDetection.pattern}`;
+          recordAuthEvent(
+            "claude",
+            authDetection.excerpt ?? authDetection.pattern ?? "auth_failure",
+            "pr-review-worker",
+          ).catch(() => {});
+        }
 
         const costFields: Record<string, unknown> = {
           resultSummary: result.summary,

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, and, lt, sql, asc } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { repoPods, tasks, interactiveSessions, workspaces } from "../db/schema.js";
+import { repoPods, tasks, prReviewRuns, interactiveSessions, workspaces } from "../db/schema.js";
 import { getRuntime } from "./container-service.js";
 import type { ContainerHandle, ContainerSpec, ExecSession, RepoImageConfig } from "@optio/shared";
 import {
@@ -1209,7 +1209,12 @@ export async function readTaskWorktreeFile(
  * Update worktree state for a task.
  */
 export async function updateWorktreeState(taskId: string, worktreeState: string): Promise<void> {
-  await db.update(tasks).set({ worktreeState, updatedAt: new Date() }).where(eq(tasks.id, taskId));
+  const now = new Date();
+  await db.update(tasks).set({ worktreeState, updatedAt: now }).where(eq(tasks.id, taskId));
+  await db
+    .update(prReviewRuns)
+    .set({ worktreeState, updatedAt: now })
+    .where(eq(prReviewRuns.id, taskId));
 }
 
 /**

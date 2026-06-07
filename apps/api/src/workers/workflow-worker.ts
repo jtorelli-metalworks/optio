@@ -11,6 +11,7 @@ import { parseCodexEvent } from "../services/codex-event-parser.js";
 import { parseCopilotEvent } from "../services/copilot-event-parser.js";
 import { parseOpenCodeEvent } from "../services/opencode-event-parser.js";
 import { parseGeminiEvent } from "../services/gemini-event-parser.js";
+import { buildCodexAgentCommandLines } from "../services/codex-shell.js";
 import { db } from "../db/client.js";
 import { workflowRuns } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -88,12 +89,8 @@ export function buildWorkflowAgentCommand(
         `  ${modelFlag}`.trim(),
       ];
     }
-    case "codex": {
-      return [
-        `echo "[optio] Running workflow agent (Codex)..."`,
-        `codex exec --full-auto "$OPTIO_PROMPT" --json`,
-      ];
-    }
+    case "codex":
+      return buildCodexAgentCommandLines(env, "workflow agent (Codex)");
     case "copilot": {
       const modelFlag = env.COPILOT_MODEL ? ` --model ${JSON.stringify(env.COPILOT_MODEL)}` : "";
       return [

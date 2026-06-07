@@ -92,6 +92,12 @@ vi.mock("../db/schema.js", () => ({
     repoUrl: "repos.repoUrl",
     stallThresholdMs: "repos.stallThresholdMs",
   },
+  prReviewRuns: {
+    id: "prReviewRuns.id",
+    state: "prReviewRuns.state",
+    updatedAt: "prReviewRuns.updatedAt",
+    worktreeState: "prReviewRuns.worktreeState",
+  },
 }));
 
 // ── Service mocks ──────────────────────────────────────────────────────────
@@ -485,6 +491,7 @@ describe("repo-cleanup-worker", () => {
       selectResults = [
         [pod], // repoPods
         [], // task lookup for orphan worktree (no task found)
+        [], // PR review run lookup (no run found)
         [], // soft stall detection: running tasks
         [], // stale tasks
       ];
@@ -530,6 +537,32 @@ describe("repo-cleanup-worker", () => {
       await processorFn();
 
       // Only the list exec should be called — no cleanup
+      expect(mockRtExec).toHaveBeenCalledTimes(1);
+    });
+
+    it("preserves active PR review run worktrees", async () => {
+      const pod = makePod({ state: "ready" });
+      selectResults = [
+        [pod], // repoPods
+        [], // task lookup (PR reviews are not in tasks)
+        [
+          {
+            state: "running",
+            updatedAt: new Date().toISOString(),
+            worktreeState: "active",
+          },
+        ], // PR review run lookup
+        [], // soft stall detection: running tasks
+        [], // stale tasks
+      ];
+
+      mockRtStatus.mockResolvedValue({ state: "running" });
+
+      const listSession = makeExecSession("review-run-1\n");
+      mockRtExec.mockResolvedValueOnce(listSession);
+
+      await processorFn();
+
       expect(mockRtExec).toHaveBeenCalledTimes(1);
     });
 

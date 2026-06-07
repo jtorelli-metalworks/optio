@@ -5,6 +5,7 @@ import {
   inferExitCode,
   shouldEscalateNoPr,
 } from "./task-worker.js";
+import { CODEX_HEADLESS_SANDBOX } from "../services/codex-shell.js";
 
 describe("buildAgentCommand", () => {
   describe("claude-code agent", () => {
@@ -146,12 +147,14 @@ describe("buildAgentCommand", () => {
   });
 
   describe("codex agent", () => {
-    it("produces a codex exec command", () => {
+    it("produces a codex exec command with login, trust, and sandbox", () => {
       const env = { OPTIO_PROMPT: "Build feature" };
       const cmds = buildAgentCommand("codex", env);
       expect(cmds.some((c) => c.includes("codex exec"))).toBe(true);
-      expect(cmds.some((c) => c.includes("--full-auto"))).toBe(true);
+      expect(cmds.some((c) => c.includes(`--sandbox ${CODEX_HEADLESS_SANDBOX}`))).toBe(true);
+      expect(cmds.some((c) => c.includes("codex login --with-api-key"))).toBe(true);
       expect(cmds.some((c) => c.includes("--json"))).toBe(true);
+      expect(cmds.some((c) => c.includes("--full-auto"))).toBe(false);
     });
 
     it("does not include --app-server flag in api-key mode", () => {
@@ -179,6 +182,12 @@ describe("buildAgentCommand", () => {
       };
       const cmds = buildAgentCommand("codex", env);
       expect(cmds.some((c) => c.includes("(app-server)"))).toBe(true);
+    });
+
+    it("includes Codex reasoning effort config when set", () => {
+      const env = { OPTIO_PROMPT: "Review PR", CODEX_REASONING_EFFORT: "xhigh" };
+      const cmds = buildAgentCommand("codex", env);
+      expect(cmds.some((c) => c.includes('model_reasoning_effort=\\"xhigh\\"'))).toBe(true);
     });
 
     it("does not include --app-server flag when auth mode is app-server but URL is missing", () => {
@@ -352,8 +361,46 @@ describe("inferExitCode", () => {
       expect(inferExitCode("codex", logs)).toBe(1);
     });
 
+    it("returns 1 on websocket 401 missing bearer", () => {
+      const logs =
+        '{"type":"error","message":"401 Unauthorized: Missing bearer or basic authentication in header"}';
+      expect(inferExitCode("codex", logs)).toBe(1);
+    });
+
     it("returns 1 on billing error", () => {
       const logs = "billing limit exceeded\n";
+      expect(inferExitCode("codex", logs)).toBe(1);
+    });
+
+    it("returns 0 when command output contains Kotlin domain.model imports and Recipe not found", () => {
+      const logs = [
+        '{"type":"item.completed","item":{"type":"command_execution","aggregated_output":"import com.example.domain.model.Recipe\\n...Recipe not found..."}}',
+        '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}',
+      ].join("\n");
+      expect(inferExitCode("codex", logs)).toBe(0);
+    });
+
+    it("returns 1 on structured OpenAI model_not_found errors", () => {
+      const logs =
+        '{"error":{"message":"The model `gpt-5.3-codex` does not exist or you do not have access to it.","type":"invalid_request_error","code":"model_not_found"}}';
+      expect(inferExitCode("codex", logs)).toBe(1);
+    });
+
+    it("returns 1 on raw Codex model errors", () => {
+      const logs = "Error: The model `gpt-5.3-codex` does not exist\n";
+      expect(inferExitCode("codex", logs)).toBe(1);
+    });
+
+    it("returns 0 when command output embeds shell command not found in JSON", () => {
+      const logs = [
+        '{"type":"item.completed","item":{"type":"command_execution","aggregated_output":"/bin/bash: DuplicateRecipeUseCaseIntegrationTest: command not found"}}',
+        '{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}',
+      ].join("\n");
+      expect(inferExitCode("codex", logs)).toBe(0);
+    });
+
+    it("returns 1 when codex binary is missing on a raw log line", () => {
+      const logs = "codex: command not found\n";
       expect(inferExitCode("codex", logs)).toBe(1);
     });
   });

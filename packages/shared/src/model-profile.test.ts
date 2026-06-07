@@ -11,7 +11,7 @@ const PROFILES_JSON = JSON.stringify({
     standard: {
       label: "agent-ready",
       coding: { provider: "cursor", model: "composer-2.5", agentType: "cursor" },
-      review: { provider: "anthropic", model: "opus", agentType: "claude-code" },
+      review: { provider: "openai", model: "gpt-5.3-codex", agentType: "codex", effort: "xhigh" },
     },
     expert: {
       label: "expert-agent-ready",
@@ -49,8 +49,9 @@ describe("model-profile", () => {
         reviewAgentType: "claude-code",
       }),
     ).toEqual({
-      agentType: "claude-code",
-      model: "opus",
+      agentType: "codex",
+      model: "gpt-5.3-codex",
+      effort: "xhigh",
     });
   });
 
@@ -78,6 +79,7 @@ describe("model-profile", () => {
     ).toEqual({
       agentType: "claude-code",
       model: "sonnet",
+      effort: undefined,
     });
   });
 

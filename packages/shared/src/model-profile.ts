@@ -2,6 +2,7 @@ export interface ModelProfileLane {
   provider?: string;
   model?: string;
   agentType?: string;
+  effort?: string;
 }
 
 export interface ModelProfile {
@@ -27,6 +28,7 @@ export interface ResolvedCodingModels {
 export interface ResolvedReviewModels {
   agentType?: string;
   model?: string;
+  effort?: string;
 }
 
 let cachedProfiles: ModelProfilesDocument | null | undefined;
@@ -97,6 +99,7 @@ export function resolveReviewModelsForTask(
     agentType:
       review?.agentType ?? repoConfig?.reviewAgentType ?? repoConfig?.defaultAgentType ?? undefined,
     model: review?.model ?? repoConfig?.reviewModel ?? undefined,
+    effort: review?.effort,
   };
 }
 

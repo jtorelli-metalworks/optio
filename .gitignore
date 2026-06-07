@@ -11,9 +11,12 @@ coverage-report.md
 apps/api/.env
 /tmp/
 .optio/
+.optio-run-token
 .claude/
 .tool-versions
 .values.local.yaml
+**/values.*.secrets.yaml
+*middensoft*
 .worktrees/
 /issues/
 

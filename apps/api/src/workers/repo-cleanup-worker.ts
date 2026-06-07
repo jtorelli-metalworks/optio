@@ -1,7 +1,7 @@
 import { Queue, Worker } from "bullmq";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { repoPods, podHealthEvents, tasks, taskEvents, repos } from "../db/schema.js";
+import { repoPods, podHealthEvents, tasks, taskEvents, repos, prReviewRuns } from "../db/schema.js";
 import {
   cleanupIdleRepoPods,
   updateWorktreeState,
@@ -252,7 +252,59 @@ export function startRepoCleanupWorker() {
               .where(eq(tasks.id, taskId));
 
             if (!task) {
-              // No task found — orphan worktree, clean it up
+              // PR review runs use pr_review_runs.id as the worktree key, not tasks.id.
+              const [reviewRun] = await db
+                .select({
+                  state: prReviewRuns.state,
+                  updatedAt: prReviewRuns.updatedAt,
+                  worktreeState: prReviewRuns.worktreeState,
+                })
+                .from(prReviewRuns)
+                .where(eq(prReviewRuns.id, taskId));
+
+              if (reviewRun) {
+                if (
+                  reviewRun.worktreeState === "active" ||
+                  reviewRun.worktreeState === "preserved"
+                ) {
+                  continue;
+                }
+                if (reviewRun.state === "running" || reviewRun.state === "queued") {
+                  continue;
+                }
+
+                const reviewAge = reviewRun.updatedAt
+                  ? Date.now() - new Date(reviewRun.updatedAt).getTime()
+                  : 0;
+                if (reviewAge <= WORKTREE_GRACE_MS) continue;
+
+                try {
+                  const cleanSession = await rt.exec(
+                    { id: pod.podId ?? pod.podName, name: pod.podName },
+                    [
+                      "bash",
+                      "-c",
+                      `cd /workspace/repo && git worktree remove --force /workspace/tasks/${taskId} 2>/dev/null; rm -rf /workspace/tasks/${taskId}`,
+                    ],
+                    { tty: false },
+                  );
+                  for await (const _ of cleanSession.stdout as AsyncIterable<Buffer>) {
+                  }
+                  cleanSession.close();
+
+                  await updateWorktreeState(taskId, "removed");
+                  await recordHealthEvent(
+                    pod.id,
+                    pod.repoUrl,
+                    "orphan_cleaned",
+                    pod.podName,
+                    `Cleaned worktree for PR review run ${taskId} (state: ${reviewRun.state})`,
+                  );
+                } catch {}
+                continue;
+              }
+
+              // No task or PR review run — orphan worktree, clean it up
               try {
                 const cleanSession = await rt.exec(
                   { id: pod.podId ?? pod.podName, name: pod.podName },

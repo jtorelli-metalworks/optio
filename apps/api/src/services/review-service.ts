@@ -203,6 +203,7 @@ export async function launchReview(parentTaskId: string): Promise<string> {
         // Back-compat: keep populating claudeModel for one release so
         // in-flight workers that pre-date the resolver still find a model.
         claudeModel: review.model,
+        effort: profileReview.effort,
       },
     },
     {
