@@ -70,7 +70,90 @@ export async function syncAllTickets(): Promise<number> {
           .where(eq(ticketProviders.id, providerConfig.id));
       }
 
+      const existingTasks = await taskService.listTasks({ limit: 500 });
+
       for (const ticket of tickets) {
+        const isExternalSource = ticket.source !== "github" && ticket.source !== "gitlab";
+
+        // External tracker IDs (Jira keys, Linear IDs, etc.) are unique per source.
+        if (isExternalSource) {
+          const existsExternal = existingTasks.some(
+            (t: any) =>
+              t.ticketSource === ticket.source && t.ticketExternalId === ticket.externalId,
+          );
+          if (existsExternal) continue;
+        }
+
+        // Fetch comments for context
+        let commentsSection = "";
+        try {
+          const comments = await provider.fetchTicketComments(ticket.externalId, mergedConfig);
+          if (comments.length > 0) {
+            commentsSection =
+              "\n\n## Comments\n\n" +
+              comments.map((c) => `**${c.author}** (${c.createdAt}):\n${c.body}`).join("\n\n");
+          }
+        } catch (err) {
+          logger.warn({ err, ticketId: ticket.externalId }, "Failed to fetch ticket comments");
+        }
+
+        // Include attachments if available (e.g. from Jira)
+        let attachmentsSection = "";
+        if (ticket.attachments && ticket.attachments.length > 0) {
+          attachmentsSection =
+            "\n\n## Attachments\n\n" +
+            ticket.attachments
+              .map((a) => `- [${a.filename}](${a.url})${a.mimeType ? ` (${a.mimeType})` : ""}`)
+              .join("\n");
+        }
+
+        // When a task_config trigger owns this label, prefer that path so model
+        // routing stays aligned with the blueprint. Fall back to the generic
+        // repo-scoped task only when no trigger actually spawned work.
+        const handledByTaskConfig = await taskConfigService.hasMatchingTaskConfigTrigger({
+          source: ticket.source,
+          labels: ticket.labels,
+        });
+
+        if (handledByTaskConfig) {
+          try {
+            const fired = await taskConfigService.fireTicketTriggers({
+              source: ticket.source,
+              externalId: ticket.externalId,
+              title: ticket.title,
+              body: ticket.body,
+              labels: ticket.labels,
+              url: ticket.url,
+            });
+            if (fired.length > 0) {
+              const taskIds = fired.map((f) => f.taskId).join(", ");
+              try {
+                await provider.addComment(
+                  ticket.externalId,
+                  `🤖 **Optio** is working on this issue.\n\nTask ID(s): \`${taskIds}\``,
+                  mergedConfig,
+                );
+              } catch (commentErr) {
+                logger.warn(
+                  { err: commentErr, ticketId: ticket.externalId },
+                  "Failed to comment on ticket",
+                );
+              }
+              totalSynced++;
+              continue;
+            }
+            logger.warn(
+              { ticketId: ticket.externalId, source: ticket.source },
+              "Matching task_config trigger did not spawn a task; falling back to repo-scoped sync",
+            );
+          } catch (triggerErr) {
+            logger.warn(
+              { err: triggerErr, ticketId: ticket.externalId },
+              "Failed to fire ticket triggers for task_configs; falling back to repo-scoped sync",
+            );
+          }
+        }
+
         // Construct repo URL: use the ticket's repo field, or fall back to provider config
         // ticket.repo can be "owner/repo", a partial path, or a full URL
         let repoUrl: string | undefined;
@@ -104,81 +187,15 @@ export async function syncAllTickets(): Promise<number> {
           continue;
         }
 
-        // Check if task already exists for this ticket (scoped by repo + issue number)
-        const existingTasks = await taskService.listTasks({ limit: 500 });
         const normalizedRepoUrl = normalizeRepoUrl(repoUrl);
-        const alreadyExists = existingTasks.some(
-          (t: any) =>
-            t.ticketSource === ticket.source &&
-            t.ticketExternalId === ticket.externalId &&
-            normalizeRepoUrl(t.repoUrl) === normalizedRepoUrl,
-        );
-
-        if (alreadyExists) continue;
-
-        // Fetch comments for context
-        let commentsSection = "";
-        try {
-          const comments = await provider.fetchTicketComments(ticket.externalId, mergedConfig);
-          if (comments.length > 0) {
-            commentsSection =
-              "\n\n## Comments\n\n" +
-              comments.map((c) => `**${c.author}** (${c.createdAt}):\n${c.body}`).join("\n\n");
-          }
-        } catch (err) {
-          logger.warn({ err, ticketId: ticket.externalId }, "Failed to fetch ticket comments");
-        }
-
-        // Include attachments if available (e.g. from Jira)
-        let attachmentsSection = "";
-        if (ticket.attachments && ticket.attachments.length > 0) {
-          attachmentsSection =
-            "\n\n## Attachments\n\n" +
-            ticket.attachments
-              .map((a) => `- [${a.filename}](${a.url})${a.mimeType ? ` (${a.mimeType})` : ""}`)
-              .join("\n");
-        }
-
-        // When a task_config trigger owns this label, skip the generic repo-scoped
-        // task so we don't spawn duplicate work with mismatched model routing.
-        const handledByTaskConfig = await taskConfigService.hasMatchingTaskConfigTrigger({
-          source: ticket.source,
-          labels: ticket.labels,
-        });
-
-        if (handledByTaskConfig) {
-          try {
-            const fired = await taskConfigService.fireTicketTriggers({
-              source: ticket.source,
-              externalId: ticket.externalId,
-              title: ticket.title,
-              body: ticket.body,
-              labels: ticket.labels,
-              url: ticket.url,
-            });
-            if (fired.length > 0) {
-              const taskIds = fired.map((f) => f.taskId).join(", ");
-              try {
-                await provider.addComment(
-                  ticket.externalId,
-                  `🤖 **Optio** is working on this issue.\n\nTask ID(s): \`${taskIds}\``,
-                  mergedConfig,
-                );
-              } catch (commentErr) {
-                logger.warn(
-                  { err: commentErr, ticketId: ticket.externalId },
-                  "Failed to comment on ticket",
-                );
-              }
-              totalSynced++;
-            }
-          } catch (triggerErr) {
-            logger.warn(
-              { err: triggerErr, ticketId: ticket.externalId },
-              "Failed to fire ticket triggers for task_configs",
-            );
-          }
-          continue;
+        if (!isExternalSource) {
+          const alreadyExists = existingTasks.some(
+            (t: any) =>
+              t.ticketSource === ticket.source &&
+              t.ticketExternalId === ticket.externalId &&
+              normalizeRepoUrl(t.repoUrl) === normalizedRepoUrl,
+          );
+          if (alreadyExists) continue;
         }
 
         // Resolve agent type: ticket label > repo default > "claude-code"

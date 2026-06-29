@@ -631,4 +631,100 @@ describe("ticket-sync-service", () => {
     // Should NOT have logged at error level
     expect(logger.error).not.toHaveBeenCalled();
   });
+
+  it("falls back to repo-scoped task when task_config trigger matches but does not fire", async () => {
+    mockDbSelect([
+      {
+        id: "p1",
+        source: "jira",
+        config: {
+          baseUrl: "https://j.example.com",
+          email: "a@b.com",
+          repoUrl: "https://github.com/o/r",
+        },
+        enabled: true,
+      },
+    ]);
+
+    vi.mocked(taskConfigService.hasMatchingTaskConfigTrigger).mockResolvedValue(true);
+    vi.mocked(taskConfigService.fireTicketTriggers).mockResolvedValue([]);
+
+    vi.mocked(getTicketProvider).mockReturnValue({
+      fetchActionableTickets: vi.fn().mockResolvedValue([
+        {
+          title: "Jira task",
+          body: "Do the thing",
+          source: "jira",
+          externalId: "SCRUM-211",
+          url: "https://j.example.com/browse/SCRUM-211",
+          labels: ["agent-ready"],
+          repo: null,
+        },
+      ]),
+      fetchTicketComments: vi.fn().mockResolvedValue([]),
+      addComment: vi.fn(),
+    } as any);
+
+    vi.mocked(taskService.listTasks).mockResolvedValue([] as any);
+    vi.mocked(taskService.createTask).mockResolvedValue({
+      id: "fallback-task",
+      maxRetries: 3,
+    } as any);
+
+    const count = await syncAllTickets();
+
+    expect(count).toBe(1);
+    expect(taskConfigService.fireTicketTriggers).toHaveBeenCalled();
+    expect(taskService.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketSource: "jira",
+        ticketExternalId: "SCRUM-211",
+        repoUrl: "https://github.com/o/r",
+      }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ ticketId: "SCRUM-211" }),
+      expect.stringContaining("falling back to repo-scoped sync"),
+    );
+  });
+
+  it("uses task_config path without requiring ticket repo when trigger fires", async () => {
+    mockDbSelect([
+      {
+        id: "p1",
+        source: "jira",
+        config: { baseUrl: "https://j.example.com", email: "a@b.com" },
+        enabled: true,
+      },
+    ]);
+
+    vi.mocked(taskConfigService.hasMatchingTaskConfigTrigger).mockResolvedValue(true);
+    vi.mocked(taskConfigService.fireTicketTriggers).mockResolvedValue([
+      { triggerId: "tr-1", taskId: "cfg-task-1" },
+    ]);
+
+    const mockProvider = {
+      fetchActionableTickets: vi.fn().mockResolvedValue([
+        {
+          title: "Jira task",
+          body: "",
+          source: "jira",
+          externalId: "SCRUM-211",
+          url: "",
+          labels: ["agent-ready"],
+          repo: null,
+        },
+      ]),
+      fetchTicketComments: vi.fn().mockResolvedValue([]),
+      addComment: vi.fn(),
+    };
+    vi.mocked(getTicketProvider).mockReturnValue(mockProvider as any);
+    vi.mocked(taskService.listTasks).mockResolvedValue([] as any);
+
+    const count = await syncAllTickets();
+
+    expect(count).toBe(1);
+    expect(taskService.createTask).not.toHaveBeenCalled();
+    expect(mockProvider.addComment).toHaveBeenCalled();
+  });
 });

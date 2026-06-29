@@ -405,17 +405,19 @@ export async function hasMatchingTaskConfigTrigger(ticket: {
   labels?: string[];
 }): Promise<boolean> {
   const candidates = await db
-    .select()
+    .select({ trigger: workflowTriggers })
     .from(workflowTriggers)
+    .innerJoin(taskConfigs, eq(workflowTriggers.targetId, taskConfigs.id))
     .where(
       and(
         eq(workflowTriggers.targetType, "task_config"),
         eq(workflowTriggers.type, "ticket"),
         eq(workflowTriggers.enabled, true),
+        eq(taskConfigs.enabled, true),
       ),
     );
 
-  for (const trigger of candidates) {
+  for (const { trigger } of candidates) {
     const config = (trigger.config ?? {}) as Record<string, unknown>;
     if (config.source && config.source !== ticket.source) continue;
     const requiredLabels = Array.isArray(config.labels) ? (config.labels as string[]) : null;
@@ -447,18 +449,20 @@ export async function fireTicketTriggers(ticket: {
   url?: string;
 }): Promise<Array<{ triggerId: string; taskId: string }>> {
   const candidates = await db
-    .select()
+    .select({ trigger: workflowTriggers })
     .from(workflowTriggers)
+    .innerJoin(taskConfigs, eq(workflowTriggers.targetId, taskConfigs.id))
     .where(
       and(
         eq(workflowTriggers.targetType, "task_config"),
         eq(workflowTriggers.type, "ticket"),
         eq(workflowTriggers.enabled, true),
+        eq(taskConfigs.enabled, true),
       ),
     );
 
   const results: Array<{ triggerId: string; taskId: string }> = [];
-  for (const trigger of candidates) {
+  for (const { trigger } of candidates) {
     const config = (trigger.config ?? {}) as Record<string, unknown>;
     if (config.source && config.source !== ticket.source) continue;
     const requiredLabels = Array.isArray(config.labels) ? (config.labels as string[]) : null;
